@@ -1,0 +1,4 @@
+# 自定义域名（可选）：把本文件改名为 CNAME 并写入你的域名，例如：
+# party.your-org.cn
+# 然后在你的域名解析商处添加 CNAME 记录指向 <用户名>.github.io
+# 不填写则使用默认地址 https://<用户名>.github.io/<仓库名>/

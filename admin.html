@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>党建大屏 · 后台管理（GitHub Pages 版）</title>
+<style>
+:root{--red-deep:#5e0b0b;--red:#8c1418;--red-bright:#c8161d;--gold:#e9c885;--gold-soft:#f2dcab;--ink:#f5ead6;--panel:rgba(92,16,16,.55);--panel-line:rgba(233,200,133,.35);}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:"Microsoft YaHei","PingFang SC",sans-serif;background:radial-gradient(1200px 700px at 50% -10%,#7a1414,#3a0707 55%,#1a0505);color:var(--ink);padding:24px;line-height:1.6}
+h1{color:var(--gold);font-size:26px;letter-spacing:2px;margin-bottom:6px}
+.sub{color:var(--gold-soft);opacity:.85;margin-bottom:18px;font-size:14px}
+.card{background:var(--panel);border:1px solid var(--panel-line);border-radius:12px;padding:18px 20px;margin-bottom:18px;max-width:980px}
+.card h2{color:var(--gold);font-size:19px;letter-spacing:1px;margin-bottom:14px;border-left:5px solid var(--gold);padding-left:12px}
+label{display:block;font-size:14px;color:var(--gold-soft);margin:10px 0 4px}
+input,textarea,select{width:100%;background:rgba(0,0,0,.28);border:1px solid var(--panel-line);color:var(--ink);border-radius:8px;padding:9px 12px;font-size:14px;font-family:inherit}
+input:focus,textarea:focus{outline:none;border-color:var(--gold)}
+.row{display:flex;gap:12px;flex-wrap:wrap}
+.row>div{flex:1;min-width:200px}
+button{background:var(--red-bright);color:#fff;border:none;border-radius:8px;padding:10px 20px;font-size:15px;cursor:pointer;letter-spacing:1px;margin-top:14px}
+button.ghost{background:transparent;border:1px solid var(--panel-line);color:var(--gold-soft)}
+button:hover{filter:brightness(1.08)}
+.muted{font-size:12px;color:var(--gold-soft);opacity:.7;margin-top:6px}
+.hidden{display:none}
+.intro-step{background:rgba(0,0,0,.2);border:1px solid var(--panel-line);border-radius:8px;padding:12px;margin-bottom:10px}
+.intro-step b{color:var(--gold)}
+.item-input{margin:4px 0}
+table{width:100%;border-collapse:collapse;margin-top:8px}
+th,td{border:1px solid var(--panel-line);padding:6px 8px;font-size:13px;text-align:left}
+th{background:rgba(0,0,0,.3);color:var(--gold)}
+#status{margin-top:12px;font-size:14px;padding:10px 14px;border-radius:8px;display:none}
+#status.ok{display:block;background:rgba(63,174,107,.18);border:1px solid #3fae6b;color:#bfe9cf}
+#status.err{display:block;background:rgba(200,22,29,.18);border:1px solid var(--red-bright);color:#ffd2d4}
+#status.busy{display:block;background:rgba(233,200,133,.15);border:1px solid var(--gold);color:var(--gold-soft)}
+.login-note{font-size:13px;color:var(--gold-soft);opacity:.85;background:rgba(0,0,0,.2);border-left:4px solid var(--gold);padding:10px 14px;border-radius:6px;margin-bottom:14px}
+a{color:var(--gold)}
+</style>
+</head>
+<body>
+<h1>党建电视大屏 · 后台管理</h1>
+<div class="sub">数据存放在你的 GitHub 仓库，发布后电视大屏自动拉取更新（无需服务器）</div>
+
+<!-- 登录：GitHub 令牌 -->
+<div class="card" id="loginCard">
+  <h2>① 连接你的 GitHub 仓库</h2>
+  <div class="login-note">
+    本后台直接通过 GitHub API 把数据写入你的仓库（相当于「后台上传数据」）。需要：<br>
+    1）一个 <b>GitHub 仓库</b>（建议公开，显示数据已脱敏不含姓名/电话）；<br>
+    2）一个 <b>Personal Access Token（PAT）</b>，勾选 <code>repo</code> 权限。
+    生成地址：<a href="https://github.com/settings/tokens?type=beta" target="_blank" rel="noopener">github.com/settings/tokens</a>
+  </div>
+  <div class="row">
+    <div><label>仓库所有者 / 用户名</label><input id="owner" placeholder="例如 yunnan-zhongxuan" /></div>
+    <div><label>仓库名</label><input id="repo" placeholder="例如 party-screen" /></div>
+    <div><label>分支（默认 main）</label><input id="branch" placeholder="main" value="main" /></div>
+  </div>
+  <label>GitHub Token（PAT，仅本地保存于浏览器，不离开你的电脑）</label>
+  <input id="token" type="password" placeholder="github_pat_xxx..." />
+  <div class="muted">令牌仅保存在本浏览器 localStorage，不会上传到任何第三方。</div>
+  <button id="btnConnect">连接并加载数据</button>
+  <div id="status"></div>
+</div>
+
+<!-- 主编辑区 -->
+<div class="card hidden" id="editCard">
+  <h2>② 编辑内容</h2>
+
+  <div class="card" style="background:rgba(0,0,0,.18)">
+    <h2>支部信息</h2>
+    <label>支部全称</label><input id="branch_name" />
+    <label>标语 / 口号</label><input id="slogan" />
+    <div id="introEditor"></div>
+    <button class="ghost" id="addIntroStep" type="button">+ 增加一级</button>
+  </div>
+
+  <div class="card" style="background:rgba(0,0,0,.18)">
+    <h2>三会一课（会议）</h2>
+    <div id="meetingsEditor"></div>
+    <button class="ghost" id="addMeeting" type="button">+ 新增会议</button>
+  </div>
+
+  <div class="card" style="background:rgba(0,0,0,.18)">
+    <h2>党员名册（脱敏：不含姓名/电话）</h2>
+    <div class="muted">下方仅用于统计「性别/学历/年龄/身份」构成并展示职务层级与部门，<b>不收录姓名与电话</b>，可放心公开。</div>
+    <div id="membersEditor"></div>
+    <button class="ghost" id="addMember" type="button">+ 新增党员</button>
+  </div>
+
+  <div class="card" style="background:rgba(0,0,0,.18)">
+    <h2>文件上传（图片 / 资料）</h2>
+    <div class="muted">上传的图片会提交到仓库 <code>uploads/</code> 目录，可用于大屏背景或资料。单文件建议 &lt; 5MB。</div>
+    <input id="fileInput" type="file" />
+    <button class="ghost" id="btnUpload" type="button">上传到仓库</button>
+    <div id="uploadList" class="muted"></div>
+  </div>
+
+  <button id="btnPublish">保存并发布（写入仓库 screen-data.json）</button>
+  <button class="ghost" id="btnLogout" type="button">退出 / 切换仓库</button>
+  <div id="status2"></div>
+</div>
+
+<script>
+// ===== GitHub API 封装 =====
+const API='https://api.github.com';
+let CFG={owner:'',repo:'',branch:'main',token:''};
+
+function setStatus(el,msg,type){ const e=document.getElementById(el); e.textContent=msg; e.className=type||''; }
+function authHeaders(extra){ return Object.assign({'Authorization':'Bearer '+CFG.token,'Accept':'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28','User-Agent':'party-screen-admin'},extra||{}); }
+async function ghGet(path){
+  const r=await fetch(`${API}/repos/${CFG.owner}/${CFG.repo}/contents/${path}?ref=${CFG.branch}`,{headers:authHeaders()});
+  if(r.status===404) return null;
+  if(!r.ok) throw new Error('GitHub '+r.status+': '+((await r.json()).message||''));
+  return r.json();
+}
+async function ghPut(path,content,sha,message){
+  const body={message,content,branch:CFG.branch}; if(sha) body.sha=sha;
+  const r=await fetch(`${API}/repos/${CFG.owner}/${CFG.repo}/contents/${path}`,{method:'PUT',headers:authHeaders({'Content-Type':'application/json'}),body:JSON.stringify(body)});
+  if(!r.ok) throw new Error('GitHub '+r.status+': '+((await r.json()).message||''));
+  return r.json();
+}
+function b64(str){ return btoa(unescape(encodeURIComponent(str))); }
+
+// ===== 状态持久化 =====
+function saveCfg(){ try{ localStorage.setItem('ghAdmin', JSON.stringify(CFG)); }catch(e){} }
+function loadCfg(){ try{ const s=localStorage.getItem('ghAdmin'); if(s){ CFG=JSON.parse(s); } }catch(e){} }
+
+// ===== 数据模型 =====
+let DATA={branch_config:{branch_name:'',slogan:'',intro:[]},members:[],meetings:[]};
+
+// ---- 渲染：支部信息 ----
+function renderBranch(){
+  document.getElementById('branch_name').value=DATA.branch_config.branch_name||'';
+  document.getElementById('slogan').value=DATA.branch_config.slogan||'';
+  const box=document.getElementById('introEditor'); box.innerHTML='';
+  (DATA.branch_config.intro||[]).forEach((g,gi)=>{
+    const div=document.createElement('div'); div.className='intro-step';
+    div.innerHTML=`<b>第 ${gi+1} 级</b>
+      <div class="row"><div><label>标题（如 一抓）</label><input data-i="${gi}" data-k="title" value="${g.title||''}"></div>
+      <div><label>副标题</label><input data-i="${gi}" data-k="subtitle" value="${g.subtitle||''}"></div></div>
+      <label>要点（每行一个）</label>
+      <textarea data-i="${gi}" data-k="items" rows="3">${(g.items||[]).join('\n')}</textarea>
+      <button class="ghost" type="button" onclick="delIntroStep(${gi})">删除本级</button>`;
+    box.appendChild(div);
+  });
+}
+function delIntroStep(gi){ DATA.branch_config.intro.splice(gi,1); renderBranch(); }
+function addIntroStep(){ DATA.branch_config.intro.push({title:'',subtitle:'',items:[]}); renderBranch(); }
+
+// ---- 渲染：会议 ----
+function renderMeetings(){
+  const box=document.getElementById('meetingsEditor'); box.innerHTML='';
+  (DATA.meetings||[]).forEach((m,mi)=>{
+    const div=document.createElement('div'); div.className='intro-step';
+    div.innerHTML=`<b>会议 #${mi+1}</b>
+      <div class="row"><div><label>类型</label><input data-m="${mi}" data-k="mtype" value="${m.mtype||''}"></div>
+      <div><label>标题</label><input data-m="${mi}" data-k="title" value="${m.title||''}"></div></div>
+      <div class="row"><div><label>日期</label><input data-m="${mi}" data-k="mdate" value="${m.mdate||''}"></div>
+      <div><label>地点</label><input data-m="${mi}" data-k="location" value="${m.location||''}"></div>
+      <div><label>主持</label><input data-m="${mi}" data-k="host" value="${m.host||''}"></div>
+      <div><label>参会人数</label><input data-m="${mi}" data-k="attendees" value="${m.attendees||0}"></div></div>
+      <label>内容</label><textarea data-m="${mi}" data-k="content" rows="2">${m.content||''}</textarea>
+      <label>小结</label><input data-m="${mi}" data-k="summary" value="${m.summary||''}">
+      <div class="row"><div><label><input type="checkbox" data-m="${mi}" data-k="is_featured" ${m.is_featured?'checked':''}> 重点展示</label></div></div>
+      <button class="ghost" type="button" onclick="delMeeting(${mi})">删除该会议</button>`;
+    box.appendChild(div);
+  });
+}
+function delMeeting(mi){ DATA.meetings.splice(mi,1); renderMeetings(); }
+function addMeeting(){ DATA.meetings.push({mtype:'支部委员会',title:'',mdate:'',location:'',host:'',attendees:0,content:'',summary:'',is_featured:0}); renderMeetings(); }
+
+// ---- 渲染：党员（脱敏） ----
+function renderMembers(){
+  const box=document.getElementById('membersEditor'); box.innerHTML='';
+  (DATA.members||[]).forEach((m,mi)=>{
+    const div=document.createElement('div'); div.className='intro-step';
+    div.innerHTML=`<b>党员 #${mi+1}</b>
+      <div class="row"><div><label>性别</label><select data-p="${mi}" data-k="gender"><option ${m.gender==='男'?'selected':''}>男</option><option ${m.gender==='女'?'selected':''}>女</option></select></div>
+      <div><label>学历</label><input data-p="${mi}" data-k="education" value="${m.education||''}"></div>
+      <div><label>出生年份</label><input data-p="${mi}" data-k="birth_year" value="${m.birth_year||''}"></div>
+      <div><label>身份</label><select data-p="${mi}" data-k="status"><option ${m.status==='正式党员'?'selected':''}>正式党员</option><option ${m.status==='预备党员'?'selected':''}>预备党员</option></select></div>
+      <div><label>党内职务</label><input data-p="${mi}" data-k="position" value="${m.position||''}"></div>
+      <div><label>部门</label><input data-p="${mi}" data-k="department" value="${m.department||''}"></div>
+      <div><label>荣誉</label><input data-p="${mi}" data-k="honor" value="${m.honor||''}"></div></div>
+      <button class="ghost" type="button" onclick="delMember(${mi})">删除</button>`;
+    box.appendChild(div);
+  });
+}
+function delMember(mi){ DATA.members.splice(mi,1); renderMembers(); }
+function addMember(){ DATA.members.push({gender:'男',education:'本科',birth_year:1990,status:'正式党员',position:'党员',department:'',honor:''}); renderMembers(); }
+
+// ===== 收集表单 -> DATA =====
+function collect(){
+  DATA.branch_config.branch_name=document.getElementById('branch_name').value;
+  DATA.branch_config.slogan=document.getElementById('slogan').value;
+  document.querySelectorAll('#introEditor [data-i]').forEach(el=>{
+    const i=+el.dataset.i,k=el.dataset.k;
+    if(k==='items') DATA.branch_config.intro[i].items=el.value.split('\n').map(s=>s.trim()).filter(Boolean);
+    else DATA.branch_config.intro[i][k]=el.value;
+  });
+  document.querySelectorAll('#meetingsEditor [data-m]').forEach(el=>{
+    const i=+el.dataset.m,k=el.dataset.k;
+    if(k==='is_featured') DATA.meetings[i][k]=el.checked?1:0;
+    else if(k==='attendees') DATA.meetings[i][k]=Number(el.value)||0;
+    else DATA.meetings[i][k]=el.value;
+  });
+  document.querySelectorAll('#membersEditor [data-p]').forEach(el=>{
+    const i=+el.dataset.p,k=el.dataset.k;
+    if(k==='birth_year') DATA.members[i][k]=Number(el.value)||null;
+    else DATA.members[i][k]=el.value;
+  });
+}
+
+// ===== 由 DATA 计算脱敏 screen-data.json =====
+function computeStats(members){
+  const curYear=new Date().getFullYear();
+  const gender={男:0,女:0}, education={}, age={'≤30':0,'31-40':0,'41-50':0,'51-60':0,'>60':0}, status={'正式党员':0,'预备党员':0};
+  let total=members.length, formal=0, probation=0;
+  const EDU=['高中及以下','大专','本科','硕士研究生','博士研究生']; EDU.forEach(e=>education[e]=0);
+  for(const m of members){
+    const g=m.gender||'未知'; gender[g]=(gender[g]||0)+1;
+    if(m.education in education) education[m.education]++;
+    const by=m.birth_year||(curYear-35), a=curYear-by;
+    if(a<=30)age['≤30']++; else if(a<=40)age['31-40']++; else if(a<=50)age['41-50']++; else if(a<=60)age['51-60']++; else age['>60']++;
+    const st=m.status||'正式党员'; status[st]=(status[st]||0)+1;
+    if(st==='正式党员')formal++; else if(st==='预备党员')probation++;
+  }
+  return {total,formal,probation,gender,education,age,status};
+}
+function buildScreenData(){
+  const members=DATA.members||[];
+  const stats=computeStats(members);
+  const roster=members.map(m=>({gender:m.gender,education:m.education,status:m.status,position_level:(m.position&&m.position!=='党员')?'支委':'党员',department:m.department,honor:m.honor||''}));
+  const meetings=(DATA.meetings||[]).slice().sort((a,b)=>{const fa=b.is_featured?1:0,fb=a.is_featured?1:0;if(fa!==fb)return fa-fb;return (b.mdate||'').localeCompare(a.mdate||'');})
+    .map(x=>({mtype:x.mtype,title:x.title,mdate:x.mdate,location:x.location,host:(x.host&&(x.host.includes('书记')||x.host.includes('委员')))?x.host:'负责人',attendees:x.attendees,content:x.content,summary:x.summary,is_featured:x.is_featured}));
+  return {
+    config:{branch_name:DATA.branch_config.branch_name,slogan:DATA.branch_config.slogan,intro:DATA.branch_config.intro||[]},
+    stats, roster, meetings,
+    updated_at:new Date().toLocaleString('zh-CN')
+  };
+}
+
+// ===== 连接 / 加载 =====
+async function connect(){
+  CFG.owner=document.getElementById('owner').value.trim();
+  CFG.repo=document.getElementById('repo').value.trim();
+  CFG.branch=document.getElementById('branch').value.trim()||'main';
+  CFG.token=document.getElementById('token').value.trim();
+  if(!CFG.owner||!CFG.repo||!CFG.token){ setStatus('status','请填写仓库与 Token','err'); return; }
+  setStatus('status','正在连接 '+CFG.owner+'/'+CFG.repo+' ...','busy');
+  try{
+    const meta=await ghGet('data/party.json');
+    if(meta){ DATA=JSON.parse(decodeURIComponent(escape(atob(meta.content)))); }
+    else { // 首次：用仓库根 screen-data.json（若有）或内置空模板
+      const sd=await ghGet('screen-data.json');
+      if(sd) DATA=jsonFromScreen(JSON.parse(decodeURIComponent(escape(atob(sd.content)))));
+      else DATA={branch_config:{branch_name:'',slogan:'',intro:[]},members:[],meetings:[]};
+    }
+    saveCfg();
+    renderBranch(); renderMeetings(); renderMembers();
+    document.getElementById('loginCard').classList.add('hidden');
+    document.getElementById('editCard').classList.remove('hidden');
+    setStatus('status','连接成功，已加载现有数据。','ok');
+  }catch(e){ setStatus('status','连接失败：'+e.message,'err'); }
+}
+function jsonFromScreen(sd){ return {branch_config:sd.config||{branch_name:'',slogan:'',intro:[]},members:(sd.roster||[]).map(r=>({gender:r.gender,education:r.education,status:r.status,position:r.position_level==='支委'?'党支部委员':'党员',department:r.department,honor:r.honor})),meetings:sd.meetings||[]}; }
+
+// ===== 发布 =====
+async function publish(){
+  collect();
+  setStatus('status2','正在保存 party.json ...','busy');
+  try{
+    const partyTxt=JSON.stringify(DATA,null,2);
+    let p=await ghGet('data/party.json');
+    await ghPut('data/party.json', b64(partyTxt), p?p.sha:null, '更新党建数据 '+new Date().toLocaleString('zh-CN'));
+    setStatus('status2','正在生成并发布 screen-data.json（电视拉取用）...','busy');
+    const sd=buildScreenData();
+    const sdTxt=JSON.stringify(sd,null,2);
+    let s=await ghGet('screen-data.json');
+    await ghPut('screen-data.json', b64(sdTxt), s?s.sha:null, '发布大屏展示数据 '+new Date().toLocaleString('zh-CN'));
+    setStatus('status2','发布成功！电视大屏将在 30 秒内自动更新。','ok');
+  }catch(e){ setStatus('status2','发布失败：'+e.message,'err'); }
+}
+
+// ===== 上传文件 =====
+async function upload(){
+  const f=document.getElementById('fileInput').files[0]; if(!f){ setStatus('status2','请先选择文件','err'); return; }
+  if(f.size>5*1024*1024){ setStatus('status2','文件超过 5MB，请压缩后上传','err'); return; }
+  setStatus('status2','上传中：'+f.name+' ...','busy');
+  try{
+    const buf=await f.arrayBuffer(); const b64str=b64(String.fromCharCode(...new Uint8Array(buf)));
+    const path='uploads/'+Date.now()+'_'+f.name.replace(/\s+/g,'_');
+    let ex=await ghGet(path);
+    await ghPut(path, b64str, ex?ex.sha:null, 'upload '+f.name);
+    const url=`https://raw.githubusercontent.com/${CFG.owner}/${CFG.repo}/${CFG.branch}/${path}`;
+    const ul=document.getElementById('uploadList'); ul.innerHTML+=`<div>✓ <a href="${url}" target="_blank" rel="noopener">${f.name}</a> — 引用地址：<code>${url}</code></div>`;
+    setStatus('status2','上传成功：'+url,'ok');
+  }catch(e){ setStatus('status2','上传失败：'+e.message,'err'); }
+}
+
+function logout(){ localStorage.removeItem('ghAdmin'); location.reload(); }
+
+// ===== 事件绑定 / 初始化 =====
+loadCfg();
+if(CFG.owner){ document.getElementById('owner').value=CFG.owner; document.getElementById('repo').value=CFG.repo; document.getElementById('branch').value=CFG.branch; document.getElementById('token').value=CFG.token; }
+document.getElementById('btnConnect').onclick=connect;
+document.getElementById('btnPublish').onclick=publish;
+document.getElementById('btnUpload').onclick=upload;
+document.getElementById('btnLogout').onclick=logout;
+document.getElementById('addIntroStep').onclick=addIntroStep;
+document.getElementById('addMeeting').onclick=addMeeting;
+document.getElementById('addMember').onclick=addMember;
+window.delIntroStep=delIntroStep; window.delMeeting=delMeeting; window.delMember=delMember;
+</script>
+</body>
+</html>

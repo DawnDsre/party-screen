@@ -1,0 +1,37 @@
+【党建大屏】上传完本目录所有文件后，按下面 4 步开启网站（固定网址）
+
+第 1 步：确认文件已在仓库根目录
+  仓库页面应直接看到这些文件和文件夹（不要 nested 在子文件夹里）：
+    index.html
+    admin.html
+    screen-data.json
+    data/            （里面有 party.json）
+    .github/         （里面有 workflows/pages.yml）
+    README.md
+
+第 2 步：开启 GitHub Pages（关键！不上这步网站永远不出）
+  1) 点仓库顶部的 「Settings」（设置）标签
+     —— 若顶部看不到 Settings，点右侧「⋯」下拉，选 Settings
+  2) 在左侧栏往下找 「代码、规划和自动化」这个分组，点开它下面的 「Pages」
+  3) 在「Build and deployment（生成和部署）→ Source（源）」下拉框里，选
+       **GitHub Actions**
+  4) 选完不用再选分支，页面会提示已配置 workflow
+
+第 3 步：等部署（约 1–2 分钟）
+  回到仓库顶部，点 「Actions」 标签
+  看到名为 「Deploy to GitHub Pages」 的工作流在运行，等它变绿（✓）
+  若一直是灰/红：
+    - 红色 → 点进去看日志（多半是仓库为私有且免费账号，需设为 Public：
+      Settings → 底部 Danger Zone → Change visibility → 设为 Public）
+    - 部署没触发 → 确认第 2 步 Source 已选 GitHub Actions
+
+第 4 步：拿到固定网址
+  部署变绿后，回到 Settings → Pages
+  页面顶部会出现：
+      Your site is live at https://你的用户名.github.io/仓库名/
+  这个就是固定网址：
+    后台管理： https://你的用户名.github.io/仓库名/admin.html
+    大屏数据： https://你的用户名.github.io/仓库名/screen-data.json
+
+第 5 步：让电视连上
+  电视 exe 后台「远程数据源」填上面的 .json 地址，保存 → 大屏每 15 秒自动更新。

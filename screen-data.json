@@ -1,0 +1,42 @@
+{
+  "config": {
+    "branch_name": "中共云南中宣液态金属科技有限公司支部委员会",
+    "slogan": "不忘初心 牢记使命",
+    "intro": [
+      { "step": "一", "title": "一抓", "subtitle": "抓规范夯基础", "items": ["阵地建设规范化", "支部设置标准化", "组织管理精细化", "工作制度体系化", "活动开展常态化"] },
+      { "step": "二", "title": "二创", "subtitle": "勇创新争一流", "items": ["创一流党支部", "创一流人才队伍"] },
+      { "step": "三", "title": "三提升", "subtitle": "提业绩强发展", "items": ["提升企业凝聚力", "提升企业创新力", "提升企业竞争力"] }
+    ]
+  },
+  "stats": {
+    "total": 12,
+    "formal": 11,
+    "probation": 1,
+    "gender": { "男": 7, "女": 5 },
+    "education": { "高中及以下": 1, "大专": 2, "本科": 6, "硕士研究生": 2, "博士研究生": 1 },
+    "age": { "≤30": 2, "31-40": 6, "41-50": 4, "51-60": 0, ">60": 0 },
+    "status": { "正式党员": 11, "预备党员": 1 }
+  },
+  "roster": [
+    { "gender": "男", "education": "本科", "status": "正式党员", "position_level": "支委", "department": "综合部", "honor": "优秀党务工作者" },
+    { "gender": "女", "education": "硕士研究生", "status": "正式党员", "position_level": "支委", "department": "财务部", "honor": "" },
+    { "gender": "男", "education": "本科", "status": "正式党员", "position_level": "支委", "department": "市场部", "honor": "" },
+    { "gender": "女", "education": "本科", "status": "正式党员", "position_level": "党员", "department": "技术部", "honor": "" },
+    { "gender": "男", "education": "大专", "status": "正式党员", "position_level": "支委", "department": "生产部", "honor": "技术标兵" },
+    { "gender": "男", "education": "本科", "status": "预备党员", "position_level": "党员", "department": "研发部", "honor": "" },
+    { "gender": "女", "education": "硕士研究生", "status": "正式党员", "position_level": "党员", "department": "人力部", "honor": "" },
+    { "gender": "男", "education": "高中及以下", "status": "正式党员", "position_level": "党员", "department": "后勤部", "honor": "" },
+    { "gender": "女", "education": "本科", "status": "正式党员", "position_level": "党员", "department": "行政部", "honor": "" },
+    { "gender": "男", "education": "博士研究生", "status": "正式党员", "position_level": "党员", "department": "研发部", "honor": "" },
+    { "gender": "女", "education": "本科", "status": "正式党员", "position_level": "党员", "department": "市场部", "honor": "" },
+    { "gender": "男", "education": "大专", "status": "正式党员", "position_level": "党员", "department": "生产部", "honor": "" }
+  ],
+  "meetings": [
+    { "mtype": "支部委员会", "title": "第二季度支部委员会", "mdate": "2026-08-22", "location": "党员活动室", "host": "负责人", "attendees": 5, "content": "研究部署党纪学习教育工作安排，审议支部半年工作总结。", "summary": "形成季度工作计划1份", "is_featured": 1 },
+    { "mtype": "党课", "title": "党纪学习教育专题党课", "mdate": "2026-08-15", "location": "大会议室", "host": "负责人", "attendees": 12, "content": "围绕《中国共产党纪律处分条例》开展专题辅导，强化党员纪律意识。", "summary": "党员撰写心得体会12篇", "is_featured": 1 },
+    { "mtype": "支部党员大会", "title": "预备党员转正大会", "mdate": "2026-08-08", "location": "党员活动室", "host": "负责人", "attendees": 12, "content": "讨论并通过刘洋同志预备党员转正事宜。", "summary": "刘洋同志按期转正", "is_featured": 0 },
+    { "mtype": "党小组会", "title": "研发党小组学习会", "mdate": "2026-08-01", "location": "研发部办公室", "host": "负责人", "attendees": 4, "content": "学习习近平总书记关于科技创新的重要论述，交流学习体会。", "summary": "小组学习记录1份", "is_featured": 0 },
+    { "mtype": "支部委员会", "title": "第一季度支部委员会", "mdate": "2026-07-15", "location": "党员活动室", "host": "负责人", "attendees": 5, "content": "研究年度党建工作计划与主题党日安排。", "summary": "制定年度计划", "is_featured": 0 }
+  ],
+  "updated_at": "2026-08-26 00:00:00"
+}

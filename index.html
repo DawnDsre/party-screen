@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>党建电视大屏 · 网页版（离线可开）</title>
+<style>
+:root{
+  --red-deep:#5e0b0b;--red:#8c1418;--red-bright:#c8161d;
+  --gold:#e9c885;--gold-soft:#f2dcab;--ink:#f5ead6;
+  --panel:rgba(92,16,16,.55);--panel-line:rgba(233,200,133,.35);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;font-family:"Microsoft YaHei","PingFang SC","Hiragino Sans GB",sans-serif;background:#1a0505;color:var(--ink)}
+#app{height:100vh;display:flex;flex-direction:column;background:radial-gradient(1200px 700px at 50% -10%,#7a1414 0%,#3a0707 55%,#1a0505 100%)}
+/* 顶部控制栏（测试用，可隐藏） */
+#bar{height:54px;background:linear-gradient(90deg,#5e0b0b,#3a0707);border-bottom:1px solid var(--panel-line);
+  display:flex;align-items:center;gap:10px;padding:0 16px;flex-shrink:0}
+#bar .b-title{color:var(--gold);font-weight:700;letter-spacing:2px;margin-right:auto}
+#bar button{background:transparent;border:1px solid var(--panel-line);color:var(--gold-soft);padding:7px 14px;border-radius:8px;font-size:14px;cursor:pointer}
+#bar button:hover{background:rgba(233,200,133,.14)}
+#bar button.on{background:var(--red-bright);color:#fff;border-color:var(--red-bright)}
+
+#stage{flex:1;position:relative;overflow:hidden}
+/* 大屏缩放容器 */
+#scaler{position:absolute;inset:0}
+.screen{width:1920px;height:1080px;transform-origin:left top;position:absolute;display:flex;flex-direction:column;padding:18px 26px 10px}
+.screen-header{position:relative;height:120px;display:flex;align-items:center;justify-content:space-between;background:linear-gradient(180deg,rgba(94,11,11,.9),rgba(94,11,11,0));border-bottom:2px solid var(--panel-line)}
+.header-center{text-align:center;flex:1}
+.header-center h1{font-size:46px;letter-spacing:8px;color:var(--gold);text-shadow:0 2px 12px rgba(0,0,0,.6);font-weight:800}
+.slogan{margin-top:6px;font-size:20px;letter-spacing:6px;color:var(--gold-soft);opacity:.9}
+.header-side{width:360px;color:var(--gold-soft)}
+.header-side.right{text-align:right}
+.clock{font-size:40px;color:var(--gold);font-variant-numeric:tabular-nums;letter-spacing:2px;font-weight:700}
+.date{font-size:18px;opacity:.85;margin-top:4px}
+.header-deco{position:absolute;bottom:-2px;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--gold),transparent)}
+.screen-body{flex:1;display:grid;grid-template-columns:460px 1fr 460px;gap:18px;padding-top:18px;min-height:0}
+.col{display:flex;flex-direction:column;gap:18px;min-height:0}
+.col .panel{flex:1;min-height:0}
+.col-center{gap:18px}
+.col-center>.panel{flex:1;min-height:0}
+.panel-compact{flex:0 0 auto !important}
+.panel{background:var(--panel);border:1px solid var(--panel-line);border-radius:10px;padding:14px 16px;display:flex;flex-direction:column;min-height:0;backdrop-filter:blur(2px);box-shadow:inset 0 0 30px rgba(0,0,0,.25)}
+.panel-title{font-size:22px;color:var(--gold);letter-spacing:3px;font-weight:700;margin-bottom:10px;padding-left:14px;position:relative;display:flex;align-items:center;justify-content:space-between}
+.panel-title::before{content:"";position:absolute;left:0;top:4px;bottom:4px;width:5px;border-radius:3px;background:linear-gradient(var(--gold),var(--red-bright))}
+.panel-title em{font-style:normal;font-size:14px;background:var(--red-bright);color:#fff;padding:2px 10px;border-radius:20px;letter-spacing:1px}
+.chart{width:100%;flex:1;min-height:160px}
+.overview{display:flex;gap:12px}
+.ov-item{flex:1;background:rgba(0,0,0,.22);border:1px solid var(--panel-line);border-radius:8px;text-align:center;padding:14px 0}
+.ov-num{font-size:42px;color:var(--gold);font-weight:800;line-height:1}
+.ov-label{font-size:16px;color:var(--gold-soft);margin-top:8px;letter-spacing:2px}
+.meeting-list{list-style:none;overflow-y:auto;flex:1;display:flex;flex-direction:column;gap:10px;scrollbar-width:thin}
+.meeting-list::-webkit-scrollbar{width:6px}
+.meeting-list::-webkit-scrollbar-thumb{background:rgba(233,200,133,.35);border-radius:3px}
+.meeting-list li{background:rgba(0,0,0,.22);border-left:4px solid var(--gold);border-radius:6px;padding:10px 14px}
+.mt-head{display:flex;align-items:center;gap:12px}
+.mt-type{flex:0 0 116px;width:116px;text-align:center;font-size:14px;letter-spacing:1px;background:var(--red-bright);color:#fff;padding:3px 0;border-radius:6px}
+.mt-title{font-size:20px;color:var(--ink);font-weight:600;line-height:1.3}
+.mt-meta{font-size:14px;color:var(--gold-soft);opacity:.8;margin-top:8px;padding-left:128px}
+.mt-summary{font-size:14px;color:var(--ink);opacity:.85;margin-top:4px;padding-left:128px}
+.carousel{flex:1;overflow:hidden;position:relative}
+.carousel-item{position:absolute;inset:0;opacity:0;visibility:hidden;pointer-events:none;transition:opacity .5s,visibility .5s;padding:6px 4px}
+.carousel-item.active{opacity:1;visibility:visible;pointer-events:auto}
+.ci-type{font-size:15px;color:var(--gold);letter-spacing:2px}
+.ci-title{font-size:26px;color:var(--gold-soft);font-weight:700;margin:8px 0}
+.ci-row{font-size:16px;line-height:1.9;color:var(--ink);opacity:.92}
+.ci-row b{color:var(--gold);font-weight:600}
+/* 支部简介 · 一抓二创三提升（品牌色阶 · 红→金渐进） */
+.panel-intro{flex:0 0 auto !important}
+.intro-flow{display:flex;align-items:stretch;gap:8px;padding:2px 2px 4px;height:100%}
+.intro-node{flex:1;position:relative;display:flex;flex-direction:column;background:linear-gradient(160deg,rgba(0,0,0,.30),rgba(0,0,0,.14));border:1px solid var(--panel-line);border-radius:14px;padding:16px 16px 18px;min-width:0;box-shadow:inset 0 0 0 1px rgba(233,200,133,.08),0 8px 22px rgba(0,0,0,.28);overflow:hidden;animation:nodeIn .7s cubic-bezier(.16,1,.3,1) both;animation-delay:calc(var(--gi,0) * .12s)}
+.intro-node::before{content:"";position:absolute;left:0;top:0;bottom:0;width:5px;background:linear-gradient(var(--accent),var(--accent2))}
+.intro-top{display:flex;align-items:center;gap:14px}
+.intro-badge{width:50px;height:50px;flex:0 0 50px;border-radius:15px;display:flex;align-items:center;justify-content:center;font-size:30px;font-weight:800;color:#fff;font-family:"KaiTi","STKaiti","SimSun",serif;letter-spacing:1px;background:linear-gradient(135deg,var(--accent),var(--accent2));box-shadow:0 5px 16px rgba(0,0,0,.4),0 0 0 3px rgba(233,200,133,.22)}
+.intro-titles{display:flex;flex-direction:column;line-height:1.18;min-width:0}
+.intro-titles b{font-size:25px;letter-spacing:3px;font-weight:800;background:linear-gradient(180deg,var(--gold),var(--gold-soft));-webkit-background-clip:text;background-clip:text;color:transparent;text-shadow:0 1px 10px rgba(0,0,0,.25)}
+.intro-titles i{font-style:normal;font-size:13px;color:var(--gold-soft);opacity:.9;margin-top:5px;letter-spacing:1px}
+.intro-track{height:2px;margin:13px 0 13px;background:linear-gradient(90deg,var(--accent),transparent);border-radius:2px;opacity:.6}
+.intro-chips{display:flex;flex-wrap:wrap;gap:9px;align-content:flex-start}
+.intro-chip{position:relative;font-size:14px;color:var(--ink);line-height:1.2;padding:7px 14px 7px 27px;border-radius:20px;background:rgba(233,200,133,.12);border:1px solid rgba(233,200,133,.3);animation:chipIn .5s cubic-bezier(.16,1,.3,1) both;animation-delay:calc(var(--gi,0) * .12s + var(--i,0) * .06s)}
+.intro-chip::before{content:"";position:absolute;left:12px;top:50%;transform:translateY(-50%);width:7px;height:7px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 2px rgba(233,200,133,.25)}
+.intro-chip.empty{opacity:.5;font-style:italic}
+.intro-next{position:absolute;right:-3px;top:50%;transform:translateY(-50%);color:var(--gold);font-size:22px;font-weight:800;opacity:.5;flex:0 0 auto;z-index:2}
+.intro-flow.instant .intro-node,.intro-flow.instant .intro-chip{animation:none}
+@keyframes nodeIn{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:none}}
+@keyframes chipIn{from{opacity:0;transform:translateY(10px) scale(.96)}to{opacity:1;transform:none}}
+.member-table{overflow:auto;flex:1;scrollbar-width:thin}
+.member-table::-webkit-scrollbar{width:6px}
+.member-table::-webkit-scrollbar-thumb{background:rgba(233,200,133,.35);border-radius:3px}
+.member-table table{width:100%;border-collapse:collapse;font-size:15px}
+.member-table th,.member-table td{padding:8px 6px;text-align:left;border-bottom:1px solid rgba(233,200,133,.18)}
+.member-table th{color:var(--gold);font-weight:600;position:sticky;top:0;background:var(--red-deep)}
+.member-table td{color:var(--ink)}
+.tag-role{display:inline-block;font-size:12px;background:rgba(233,200,133,.2);color:var(--gold-soft);padding:1px 8px;border-radius:10px}
+.screen-footer{height:34px;display:flex;justify-content:space-between;align-items:center;font-size:14px;color:var(--gold-soft);opacity:.7;padding:0 6px}
+.foot-brand{letter-spacing:2px}
+.warn{position:fixed;top:10px;right:10px;background:rgba(0,0,0,.6);color:var(--gold-soft);border:1px solid var(--panel-line);padding:6px 12px;border-radius:8px;font-size:13px;z-index:99}
+
+/* 目录页专用 */
+.catalog-nav .panel{display:flex;flex-direction:column}
+.nav-list{display:flex;flex-direction:column;gap:14px;margin-top:6px}
+.cat-btn{background:rgba(0,0,0,.22);border:1px solid var(--panel-line);color:var(--gold-soft);font-size:24px;letter-spacing:3px;padding:20px 18px;border-radius:10px;text-align:left}
+.cat-btn.on{background:linear-gradient(90deg,var(--red-bright),var(--red));color:#fff;border-color:var(--gold);font-weight:700}
+.back-home{margin-top:auto;background:transparent;border:1px solid var(--panel-line);color:var(--gold);font-size:18px;padding:14px;border-radius:10px;letter-spacing:2px}
+.cat-content{flex:1;overflow:auto;scrollbar-width:thin}
+.cat-content::-webkit-scrollbar{width:6px}
+.cat-content::-webkit-scrollbar-thumb{background:rgba(233,200,133,.35);border-radius:3px}
+.ov-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:18px;margin-bottom:18px}
+.ov-card{background:rgba(0,0,0,.22);border:1px solid var(--panel-line);border-radius:10px;text-align:center;padding:22px 0}
+.ov-num{font-size:46px;color:var(--gold);font-weight:800}
+.ov-lab{font-size:18px;color:var(--gold-soft);margin-top:8px;letter-spacing:2px}
+.ov-charts{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;height:430px}
+.ov-charts .chart{background:rgba(0,0,0,.18);border:1px solid var(--panel-line);border-radius:10px;padding:8px}
+.data-table.dark{width:100%;border-collapse:collapse;font-size:17px}
+.data-table.dark th{background:rgba(94,11,11,.95);color:var(--gold);padding:14px 12px;text-align:left;position:sticky;top:0;border-bottom:2px solid var(--panel-line);font-weight:700;letter-spacing:1px}
+.data-table.dark td{padding:13px 12px;border-bottom:1px solid rgba(233,200,133,.18);color:var(--ink)}
+.data-table.dark tbody tr:hover td{background:rgba(233,200,133,.08)}
+.mt-list{display:flex;flex-direction:column;gap:16px}
+.mt-detail{background:rgba(0,0,0,.2);border-left:4px solid var(--gold);border-radius:8px;padding:16px 20px}
+.mt-head{display:flex;align-items:center;gap:12px}
+.mt-title{font-size:26px;color:var(--gold-soft);font-weight:700}
+.mt-meta{font-size:16px;color:var(--gold-soft);opacity:.82;margin:8px 0}
+.mt-body{font-size:17px;line-height:1.9;color:var(--ink);opacity:.92}
+.mt-sum{font-size:16px;color:var(--gold);margin-top:6px}
+.feat{font-style:normal;font-size:14px;background:var(--red-bright);color:#fff;padding:2px 12px;border-radius:14px}
+.honor-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
+.honor-card{background:rgba(0,0,0,.2);border:1px solid var(--panel-line);border-radius:12px;padding:26px;text-align:center}
+.hc-medal{font-size:48px;color:var(--gold)}
+.hc-role{font-size:18px;color:var(--gold-soft);margin:10px 0 6px}
+.hc-honor{font-size:22px;color:var(--gold);font-weight:700;letter-spacing:1px}
+.empty{color:var(--gold-soft);opacity:.8;font-size:18px;text-align:center;padding:60px 0}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="bar">
+    <span class="b-title">党建电视大屏 · 网页版（离线示例）</span>
+    <button id="bHome" class="on">主页</button>
+    <button id="bCatalog">多功能目录</button>
+    <button id="bHide">隐藏控制栏</button>
+    <button id="bFull">全屏</button>
+  </div>
+  <div id="stage">
+    <div id="scaler"></div>
+  </div>
+</div>
+<div class="warn">网页示例版 · 内嵌示例数据（非真实信息）</div>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+<script>
+// ===== 数据来自仓库内的 screen-data.json（后台「保存并发布」后自动更新，大屏每 30 秒轮询） =====
+let CONFIG={branch_name:"中共云南中宣液态金属科技有限公司支部委员会",slogan:"不忘初心 牢记使命",
+  intro:[{step:"一",title:"一抓",subtitle:"抓规范夯基础",items:["阵地建设规范化","支部设置标准化","组织管理精细化","工作制度体系化","活动开展常态化"]},
+    {step:"二",title:"二创",subtitle:"勇创新争一流",items:["创一流党支部","创一流人才队伍"]},
+    {step:"三",title:"三提升",subtitle:"提业绩强发展",items:["提升企业凝聚力","提升企业创新力","提升企业竞争力"]}]};
+let STATS={total:12,formal:11,probation:1,gender:{男:7,女:5},education:{"高中及以下":1,"大专":2,"本科":6,"硕士研究生":2,"博士研究生":1},age:{"≤30":2,"31-40":6,"41-50":4,"51-60":0,">60":0},status:{"正式党员":11,"预备党员":1}};
+let ROSTER=[];
+let MEETINGS=[];
+function applyData(d){ if(!d)return; CONFIG=d.config||CONFIG; STATS=d.stats||STATS; ROSTER=d.roster||[]; MEETINGS=d.meetings||[];
+  const u=document.getElementById('updatedAt'); if(u)u.textContent='最后更新：'+(d.updated_at||'—'); }
+async function loadData(){ try{ const r=await fetch('./screen-data.json',{cache:'no-store'}); if(r.ok){ applyData(await r.json()); renderHome(); } }catch(e){ console.warn('拉取 screen-data.json 失败',e); } }
+
+const C={red:"#c8161d",gold:"#e9c885",goldSoft:"#f2dcab",ink:"#f5ead6",line:"rgba(233,200,133,.3)"};
+const axis={color:C.goldSoft,fontSize:14};
+let charts=[];
+function fit(){const sc=document.getElementById("scaler");const screen=sc.querySelector(".screen");if(!screen)return;
+  const s=Math.min(innerWidth/1920,innerHeight/1080);
+  screen.style.transform=`scale(${s})`;screen.style.left=(innerWidth-1920*s)/2+"px";screen.style.top=(innerHeight-1080*s)/2+"px";}
+function tick(){const n=new Date();const p=x=>String(x).padStart(2,"0");
+  const c=document.getElementById("clock");if(c)c.textContent=`${p(n.getHours())}:${p(n.getMinutes())}:${p(n.getSeconds())}`;
+  const w=["日","一","二","三","四","五","六"][n.getDay()];
+  const d=document.getElementById("date");if(d)d.textContent=`${n.getFullYear()}年${n.getMonth()+1}月${n.getDate()}日 星期${w}`;}
+setInterval(tick,1000);tick();addEventListener("resize",()=>{fit();setTimeout(()=>charts.forEach(c=>c&&c.resize()),60);});
+
+function pie(dom,data){const c=echarts.init(dom);const total=data.reduce((s,d)=>s+d.value,0);c.setOption({color:["#5e0b0b","#c8161d","#a8261d","#e9c885","#caa24a"],
+  tooltip:{trigger:"item",formatter:"{b}: {c} ({d}%)"},
+  legend:{bottom:6,textStyle:{color:C.goldSoft,fontSize:14},itemWidth:14,itemHeight:14,itemGap:16,formatter:(name)=>{const item=data.find(d=>d.name===name);return `${name}  ${item?item.value:0}`;}},
+  series:[{type:"pie",radius:["46%","74%"],center:["50%","46%"],label:{show:true,position:"center",formatter:`{total|${total}}`,rich:{total:{color:C.gold,fontSize:34,fontWeight:800,lineHeight:38}}},
+  labelLine:{show:false},data:data.filter(d=>d.value>0)}]});charts.push(c);return c;}
+function bar(dom,cats,vals,color){const c=echarts.init(dom);c.setOption({tooltip:{trigger:"axis"},
+  grid:{left:12,right:18,top:42,bottom:18,containLabel:true},
+  xAxis:{type:"category",data:cats,axisLabel:{...axis,interval:0,width:64,overflow:"truncate"},axisLine:{lineStyle:{color:C.line}},axisTick:{show:false}},
+  yAxis:{type:"value",axisLabel:{...axis},splitLine:{lineStyle:{color:C.line,type:"dashed"}}},
+  series:[{type:"bar",data:vals,barWidth:"40%",itemStyle:{borderRadius:[6,6,0,0],color:new echarts.graphic.LinearGradient(0,0,0,1,[{offset:0,color:color||C.red},{offset:1,color:C.gold}])},label:{show:true,position:"top",color:C.goldSoft,fontSize:16,fontWeight:700,padding:[8,0,0,0]}}]});
+  charts.push(c);return c;}
+
+// 支部简介 · 党建工作思路「一抓二创三提升」
+// 品牌色阶：深红 → 鲜红 → 金 渐进，与「党旗红 + 金」主题统一
+const INTRO_RAMP=[["#5e0b0b","#c8161d"],["#8c1418","#e9c885"],["#c8161d","#f2dcab"]];
+function renderIntro(){
+  const box=document.getElementById("introFlow");if(!box)return;
+  const data=(CONFIG.intro&&CONFIG.intro.length)?CONFIG.intro:[];
+  const animate=!box.dataset.done;
+  box.classList.toggle("instant",!animate);
+  box.innerHTML=data.map((g,gi)=>`
+    <div class="intro-node" style="--gi:${gi};--accent:${INTRO_RAMP[gi][0]};--accent2:${INTRO_RAMP[gi][1]}">
+      <div class="intro-top"><span class="intro-badge">${g.step}</span>
+        <div class="intro-titles"><b>${g.title||''}</b><i>${g.subtitle||''}</i></div></div>
+      <div class="intro-track"></div>
+      <div class="intro-chips">${(g.items&&g.items.length)?g.items.map((it,ii)=>`<span class="intro-chip" style="--i:${ii}">${it}</span>`).join(''):'<span class="intro-chip empty">待补充</span>'}</div>
+      ${gi<data.length-1?'<span class="intro-next">⇨</span>':''}
+    </div>`).join("");
+  box.dataset.done="1";
+}
+
+function disposeAll(){ charts.forEach(c=>c&&c.dispose()); charts=[]; }
+function renderHome(){
+  disposeAll();
+  document.getElementById("scaler").innerHTML=`
+  <div class="screen">
+    <header class="screen-header">
+      <div class="header-center"><h1>${CONFIG.branch_name}</h1><div class="slogan">${CONFIG.slogan.replace(/\s+/g,'  ')}</div></div>
+      <div class="header-side right"><div class="clock" id="clock"></div><div class="date" id="date"></div></div>
+      <div class="header-deco"></div>
+    </header>
+    <main class="screen-body">
+      <section class="col col-left">
+        <div class="panel panel-compact"><div class="panel-title"><span>支部概况</span></div>
+          <div class="overview">
+            <div class="ov-item"><div class="ov-num">${STATS.total}</div><div class="ov-label">党员总数</div></div>
+            <div class="ov-item"><div class="ov-num">${STATS.formal}</div><div class="ov-label">正式党员</div></div>
+            <div class="ov-item"><div class="ov-num">${STATS.probation}</div><div class="ov-label">预备党员</div></div>
+          </div></div>
+        <div class="panel"><div class="panel-title"><span>党员性别 / 身份构成</span></div><div class="chart" id="g1"></div></div>
+        <div class="panel"><div class="panel-title"><span>党员年龄分布</span></div><div class="chart" id="g2"></div></div>
+      </section>
+      <section class="col col-center">
+        <div class="panel"><div class="panel-title"><span>三会一课 · 近期动态</span><em>重点展示</em></div><ul class="meeting-list" id="ml"></ul></div>
+        <div class="panel"><div class="panel-title"><span>会议内容 · 详情轮播</span></div><div class="carousel" id="car"></div></div>
+        <div class="panel panel-intro"><div class="panel-title"><span>支部简介 · 党建工作思路</span><em>一抓二创三提升</em></div><div class="intro-flow" id="introFlow"></div></div>
+      </section>
+      <section class="col col-right">
+        <div class="panel"><div class="panel-title"><span>党员学历构成</span></div><div class="chart" id="g3"></div></div>
+        <div class="panel"><div class="panel-title"><span>支部党员名册</span></div><div class="member-table" id="tb"></div></div>
+      </section>
+    </main>
+    <footer class="screen-footer"><span>数据来源：支部后台管理系统　<span id="updatedAt"></span></span><span class="foot-brand">云南中宣液态金属科技党支部 创作发布</span></footer>
+  </div>`;
+    document.getElementById("ml").innerHTML=MEETINGS.map(m=>`<li><div class="mt-head"><span class="mt-type">${m.mtype}</span><span class="mt-title">${m.title}</span></div>
+    <div class="mt-meta">${m.mdate} · ${m.location} · 主持：${m.host} · 参会 ${m.attendees} 人</div>${m.summary?`<div class="mt-summary">${m.summary}</div>`:""}</li>`).join("");
+  document.getElementById("car").innerHTML=MEETINGS.filter(m=>m.content).map((m,i)=>`<div class="carousel-item${i===0?' active':''}">
+    <div class="ci-type">${m.mtype}　·　${m.mdate}</div><div class="ci-title">${m.title}</div>
+    <div class="ci-row"><b>地点：</b>${m.location}　　<b>主持：</b>${m.host}</div><div class="ci-row" style="margin-top:8px">${m.content}</div></div>`).join("");
+  let idx=0;setInterval(()=>{const it=document.querySelectorAll(".carousel-item");if(!it.length)return;it[idx].classList.remove("active");idx=(idx+1)%it.length;it[idx].classList.add("active");},6000);
+  document.getElementById("tb").innerHTML=`<table><thead><tr><th>职务层级</th><th>部门</th><th>学历</th><th>身份</th></tr></thead><tbody>
+    ${ROSTER.map(m=>`<tr><td>${m.position_level}</td><td>${m.department}</td><td>${m.education}</td><td><span class="tag-role">${m.status}</span></td></tr>`).join("")}</tbody></table>`;
+  pie(document.getElementById("g1"),Object.keys(STATS.gender).map(k=>({name:k,value:STATS.gender[k]})));
+  bar(document.getElementById("g2"),Object.keys(STATS.age),Object.values(STATS.age));
+  pie(document.getElementById("g3"),Object.keys(STATS.education).map(k=>({name:k,value:STATS.education[k]})));
+  renderIntro();
+  fit();
+}
+
+function renderCatalog(cat){
+  disposeAll();
+  document.getElementById("scaler").innerHTML=`
+  <div class="screen">
+    <header class="screen-header">
+      <div class="header-center"><h1>${CONFIG.branch_name}</h1><div class="slogan">${CONFIG.slogan.replace(/\s+/g,'  ')}</div></div>
+      <div class="header-side right"><div class="clock" id="clock"></div><div class="date" id="date"></div></div>
+      <div class="header-deco"></div>
+    </header>
+    <main class="screen-body">
+      <section class="col col-left catalog-nav"><div class="panel panel-compact"><div class="panel-title"><span>多功能目录</span></div>
+        <div class="nav-list">
+          <button class="cat-btn ${cat==='overview'?'on':''}" data-c="overview">支部概况</button>
+          <button class="cat-btn ${cat==='members'?'on':''}" data-c="members">党员名册</button>
+          <button class="cat-btn ${cat==='meetings'?'on':''}" data-c="meetings">三会一课</button>
+          <button class="cat-btn ${cat==='analysis'?'on':''}" data-c="analysis">数据分析</button>
+          <button class="cat-btn ${cat==='honor'?'on':''}" data-c="honor">荣誉展播</button>
+        </div>
+        <button class="back-home" id="bh">↩ 返回大屏主页</button></div></section>
+      <section class="col col-center" style="grid-column:2 / 4"><div class="panel" style="flex:1"><div class="panel-title"><span id="ct"></span></div><div class="cat-content" id="cc"></div></div></section>
+    </main>
+    <footer class="screen-footer"><span>数据来源：支部后台管理系统（联网实时同步）</span><span class="foot-brand">云南中宣液态金属科技党支部 创作发布</span></footer>
+  </div>`;
+  const titles={overview:"支部概况",members:"党员名册",meetings:"三会一课",analysis:"数据分析",honor:"荣誉展播"};
+  document.getElementById("ct").textContent=titles[cat]||"详情";
+  const cc=document.getElementById("cc");
+  if(cat==="overview"){
+    cc.innerHTML=`<div class="ov-grid"><div class="ov-card"><div class="ov-num">${STATS.total}</div><div class="ov-lab">党员总数</div></div>
+      <div class="ov-card"><div class="ov-num">${STATS.formal}</div><div class="ov-lab">正式党员</div></div>
+      <div class="ov-card"><div class="ov-num">${STATS.probation}</div><div class="ov-lab">预备党员</div></div>
+      <div class="ov-card"><div class="ov-num">${MEETINGS.length}</div><div class="ov-lab">会议记录</div></div></div>
+      <div class="ov-charts"><div class="chart" id="a1"></div><div class="chart" id="a2"></div><div class="chart" id="a3"></div></div>`;
+    pie(document.getElementById("a1"),Object.keys(STATS.gender).map(k=>({name:k,value:STATS.gender[k]})));
+    bar(document.getElementById("a2"),Object.keys(STATS.age),Object.values(STATS.age));
+    pie(document.getElementById("a3"),Object.keys(STATS.education).map(k=>({name:k,value:STATS.education[k]})));
+  }else if(cat==="members"){
+    cc.innerHTML=`<div class="table-scroll"><table class="data-table dark"><thead><tr><th>#</th><th>性别</th><th>学历</th><th>职务层级</th><th>部门</th><th>身份</th><th>荣誉</th></tr></thead>
+      <tbody>${ROSTER.map((m,i)=>`<tr><td>${i+1}</td><td>${m.gender}</td><td>${m.education}</td><td>${m.position_level}</td><td>${m.department}</td><td>${m.status}</td><td>${m.honor?`<span class="tag-role">${m.honor}</span>`:"-"}</td></tr>`).join("")}</tbody></table></div>`;
+  }else if(cat==="meetings"){
+    cc.innerHTML=`<div class="mt-list">${MEETINGS.map(m=>`<div class="mt-detail"><div class="mt-head"><span class="mt-type">${m.mtype}</span><span class="mt-title">${m.title}</span>${m.is_featured?'<em class="feat">重点</em>':''}</div>
+      <div class="mt-meta">${m.mdate} · ${m.location} · 主持：${m.host} · 参会 ${m.attendees} 人</div><div class="mt-body">${m.content}</div>${m.summary?`<div class="mt-sum">小结：${m.summary}</div>`:""}</div>`).join("")}</div>`;
+  }else if(cat==="analysis"){
+    cc.innerHTML=`<div class="ov-charts" style="grid-template-columns:repeat(3,1fr)"><div class="chart" id="b1"></div><div class="chart" id="b2"></div><div class="chart" id="b3"></div></div>
+      <div class="ov-charts" style="grid-template-columns:repeat(2,1fr)"><div class="chart" id="b4"></div><div class="chart" id="b5"></div></div>`;
+    pie(document.getElementById("b1"),Object.keys(STATS.gender).map(k=>({name:k,value:STATS.gender[k]})));
+    bar(document.getElementById("b2"),Object.keys(STATS.age),Object.values(STATS.age));
+    pie(document.getElementById("b3"),Object.keys(STATS.education).map(k=>({name:k,value:STATS.education[k]})));
+    pie(document.getElementById("b4"),Object.keys(STATS.status).map(k=>({name:k,value:STATS.status[k]})));
+    bar(document.getElementById("b5"),["正式","预备"],[STATS.formal,STATS.probation],C.gold);
+  }else if(cat==="honor"){
+    const hs=ROSTER.filter(m=>m.honor);
+    cc.innerHTML=hs.length?`<div class="honor-grid">${hs.map(m=>`<div class="honor-card"><div class="hc-medal">★</div><div class="hc-role">${m.position_level} · ${m.department}</div><div class="hc-honor">${m.honor}</div></div>`).join("")}</div>`:`<div class="empty">暂无荣誉记录</div>`;
+  }
+  document.querySelectorAll(".cat-btn").forEach(b=>b.onclick=()=>renderCatalog(b.dataset.c));
+  document.getElementById("bh").onclick=()=>showHome();
+  fit();
+}
+
+function showHome(){charts=[];document.getElementById("bHome").classList.add("on");document.getElementById("bCatalog").classList.remove("on");renderHome();}
+function showCatalog(){charts=[];document.getElementById("bCatalog").classList.add("on");document.getElementById("bHome").classList.remove("on");renderCatalog("overview");}
+document.getElementById("bHome").onclick=showHome;
+document.getElementById("bCatalog").onclick=showCatalog;
+document.getElementById("bHide").onclick=()=>{document.getElementById("bar").style.display="none";document.getElementById("stage").style.top="0";};
+document.getElementById("bFull").onclick=()=>document.documentElement.requestFullscreen();
+loadData();
+setInterval(loadData, 30000);
+</script>
+</body>
+</html>

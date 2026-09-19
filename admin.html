@@ -228,6 +228,9 @@ const ORG_GENERIC=['委员会','组织','支部','党员','团员','全体','各
 // 个人职务/头衔（姓名后可保留，如「院士」「书记」）
 const TITLE_WORDS=['院士','教授','博士','硕士','主任','主席','部长','局长','处长','科长','队长','经理','工程师','顾问','老师','专员','秘书','助理','总监','巡视员','调研员','委员','书记','组长','班长','同志'];
 const GENERIC_ALL=ORG_GENERIC.concat(TITLE_WORDS).sort(function(a,b){return b.length-a.length;});
+// 机构/部门词尾缀：以这些字收尾且定位不到姓氏的片段，判定为组织名而非姓名，原名保留。
+// 避免「研发部、财务部、张三同志」这类「部门 + 姓名」的名单把部门一并脱敏成「该」。
+const ORG_TAIL=['部','科','室','组','中心','公司','集团','厂','处','局','院','所','委','会','班','系','队','站','办','事业部','党总支','党委','车间','分公司'];
 // 姓名区切分符：连接词 / 顿号逗号 / 省略号 / 各类括号组。
 // 切分后「切分符本身原样保留」，因此「张三（预备党员）、李四」可还原为「该（预备党员）、该」。
 const RUN_DELIM_RE=/([、，,和与及]|…+|（[^）]{0,40}）|\([^)]{0,40}\)|【[^】]{0,40}】|《[^》]{0,40}》|「[^」]{0,40}」|『[^』]{0,40}』)/;
@@ -282,6 +285,8 @@ function maskNamePart(part){
   var body=p.cand;
   if(body.indexOf('·')>=0) return '该'+p.suffix;                  // 少数民族姓名
   var i=nameStartIndex(body);
+  // 定位不到姓氏、且以机构尾缀收尾（研发部/财务部/技术中心）→ 判定为组织名，原名保留
+  if(i<0&&ORG_TAIL.some(function(w){return body.slice(-w.length)===w;})) return part;
   if(i<=0) return '该'+p.suffix;                                 // 姓名即整段 / 无法定位 → 候选整体脱敏
   var ctx=body.slice(0,i);
   // 姓名左侧只剩 1 个汉字时，它更可能是姓名首字而非语境词（如「华罗庚」的「华」），一并脱敏
@@ -346,6 +351,68 @@ function tailLooksLikeName(s){
   return looksLikeSingleName(segs[segs.length-1]);
 }
 
+// 判定一个「名单原子片段」是否像姓名：剥离称谓后为 2–4 个汉字、首字为已知姓氏，且不含数字/拉丁/分隔符。
+// 供「名单向左扩展」使用：避免把「研发部、财务部」这类部门串连同右侧姓名一并脱敏（过度脱敏）。
+function looksLikeNameSegment(s){
+  s=s.replace(/^[\s\u3000]+|[\s\u3000]+$/g,'');
+  if(!s) return false;
+  if(/[0-9A-Za-z]/.test(s)) return false;                        // 含数字/拉丁 → 非姓名（如「23 人」）
+  var p=peelGenericSuffix(s);
+  if(p.cand==='') return false;
+  var body=p.cand;
+  if(body.indexOf('·')>=0) return nameHanziLen(body)>=2;        // 少数民族姓名：含「·」且≥2 汉字
+  if(RUN_DELIM_RE.test(body)) return false;                      // 内部残留分隔符 → 非原子姓名段
+  var hl=nameHanziLen(body);
+  return hl>=2&&hl<=4&&nameStartIndex(body)>=0;
+}
+
+// 向左读取一个「姓名原子」：仅连续汉字/「·」/拉丁字母，不含空白与列表分隔符（、，,），
+// 以便名单扩展时逐段校验姓名（如「张三、李四」拆成「张三」「李四」两段分别判定）。
+function readTokenLeft(t,pos,lo){
+  var k=pos;
+  while(k>lo&&/[\u4e00-\u9fa5·A-Za-z]/.test(t.charAt(k-1))) k--;
+  return k;
+}
+
+// 名单向左扩展：以当前姓名段为尾，向左跨越「、，,」「各类括号组」「省略号」；
+// 其中「、，,」分隔符只有在左侧片段「像姓名」时才跨越，确保
+//   「张三、李四、…（23 人）…许二三」整串脱敏，而「研发部、财务部、张三」仅脱敏张三。
+function extendListLeft(t,k,lo){
+  var start=k,guard=0;
+  while(start>lo&&guard++<100){
+    var e=start;
+    while(e>lo&&/[\s\u3000]/.test(t.charAt(e-1))) e--;
+    if(e<=lo) break;
+    var ch=t.charAt(e-1);
+    if(BRACKET_PAIRS[ch]){                                       // 括号补充：无条件跨越（不承载姓名）
+      var j=t.lastIndexOf(BRACKET_PAIRS[ch],e-1);
+      if(j>=0&&e-j<=40){ start=j; continue; }
+      break;
+    }
+    if(ch==='…'){                                                // 省略号：左侧确为姓名才跨越
+      var q=e; while(q>lo&&t.charAt(q-1)==='…') q--;
+      var q2=q;                                                  // 省略号左侧可能还跟着括号补充
+      while(q2>lo){
+        var c2=t.charAt(q2-1);
+        if(/[\s\u3000]/.test(c2)){ q2--; continue; }
+        if(BRACKET_PAIRS[c2]){ var j2=t.lastIndexOf(BRACKET_PAIRS[c2],q2-1);
+          if(j2>=0&&q2-j2<=40){ q2=j2; continue; } }
+        break;
+      }
+      var tk=readTokenLeft(t,q2,lo);
+      if(tk<q2&&looksLikeNameSegment(t.slice(tk,q2))){ start=tk; continue; }
+      break;   // 左侧非姓名 → 不消费省略号，避免产生悬空的「……该」
+    }
+    if('、，,'.indexOf(ch)>=0){                                   // 列表分隔符：左侧须像姓名才跨越
+      var s1=readTokenLeft(t,e-1,lo);
+      if(s1>=e-1||!looksLikeNameSegment(t.slice(s1,e-1))) break;
+      start=s1; continue;
+    }
+    break;
+  }
+  return start;
+}
+
 // 返回 { start, repl }：把 [start, 同志) 区间替换为 repl（「同志」本身保持不变）
 function resolveRunBefore(t,p){
   var i=p, tail;
@@ -368,6 +435,9 @@ function resolveRunBefore(t,p){
     }
     return null;
   }
+  // 名单向左扩展：跨越「、/，/,」「括号组」「省略号」（跨越列表分隔符时要求左侧片段像姓名），
+  // 以覆盖「张三、李四、…（23 人）…许二三」这类超长 / 含省略号 / 含括号补充的名单。
+  k=extendListLeft(t,k,lo);
   // 逗号分句 vs 逗号分隔的名单：仅当逗号左侧那一段「本身就像一个姓名」时才继续向左延伸，
   // 从而既覆盖「张三，李四，王五同志」，又不会把「他强调了纪律，张三同志」当成名单。
   while(true){

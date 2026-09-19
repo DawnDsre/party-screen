@@ -228,7 +228,14 @@ const ORG_GENERIC=['委员会','组织','支部','党员','团员','全体','各
 // 个人职务/头衔（姓名后可保留，如「院士」「书记」）
 const TITLE_WORDS=['院士','教授','博士','硕士','主任','主席','部长','局长','处长','科长','队长','经理','工程师','顾问','老师','专员','秘书','助理','总监','巡视员','调研员','委员','书记','组长','班长','同志'];
 const GENERIC_ALL=ORG_GENERIC.concat(TITLE_WORDS).sort(function(a,b){return b.length-a.length;});
-const NAME_CONNECTOR_RE=/([、和与及])/;
+// 姓名区切分符：连接词 / 顿号逗号 / 省略号 / 各类括号组。
+// 切分后「切分符本身原样保留」，因此「张三（预备党员）、李四」可还原为「该（预备党员）、该」。
+const RUN_DELIM_RE=/([、，,和与及]|…+|（[^）]{0,40}）|\([^)]{0,40}\)|【[^】]{0,40}】|《[^》]{0,40}》|「[^」]{0,40}」|『[^』]{0,40}』)/;
+function isRunDelim(t){
+  return /^[、，,和与及]$/.test(t)||/^…+$/.test(t)||/^（[^）]*）$/.test(t)||/^\([^)]*\)$/.test(t)||/^【[^】]*】$/.test(t)||/^《[^》]*》$/.test(t)||/^「[^」]*」$/.test(t)||/^『[^』]*』$/.test(t);
+}
+// 各类括号的「右 → 左」配对表，用于向左扫描时整段跨过括号补充（如「张三（预备党员）」）
+const BRACKET_PAIRS={'）':'（',')':'(','】':'【','》':'《','」':'「','』':'『'};
 const NAME_HANZI=/[\u4e00-\u9fa5]/;
 
 function nameHanziLen(s){var n=0;for(var i=0;i<s.length;i++){if(NAME_HANZI.test(s[i]))n++;}return n;}
@@ -285,23 +292,115 @@ function maskNameRun(run){
   var m=run.match(/^(\s*)([\s\S]*?)(\s*)$/); if(!m) return run;
   var lead=m[1], body=m[2], trail=m[3];
   if(!body) return run;
-  var out=body.split(NAME_CONNECTOR_RE).map(function(t){
+  var out=body.split(RUN_DELIM_RE).map(function(t){
     if(t==='') return '';
-    if(t.length===1&&NAME_CONNECTOR_RE.test(t)) return t;        // 连接词原样保留
+    if(isRunDelim(t)) return t;                                  // 切分符（连接词/括号组）原样保留
     return maskNamePart(t);
   }).join('');
   return lead+out+trail;
 }
-// 姓名锚定正则：捕获紧邻「同志」的汉字/顿号/·/空白串，并连同「同志」一起消费，
-// 内部 (?!同志) 防止跨越中间的「同志」。
-const RE_NAME=/([\u4e00-\u9fa5·](?:(?!同志)[\u4e00-\u9fa5、·\s]){0,39})同志/g;
+// ===== 姓名定位：以「同志」为锚点向左扫描 =====
+// 旧实现用单个正则 `([汉字·](?:(?!同志)[汉字、·\s]){0,39})同志`，存在三处结构性漏判：
+//   a) 字符类不含括号/逗号 → 「张三（预备党员）同志」「张三，同志」整段不匹配，直接明文输出；
+//   b) 字符类不含拉丁字母 → 中英混排「张San同志」不匹配；
+//   c) {0,39} 上限 → 超过 40 字的名单只有末尾一段被脱敏，前段姓名明文残留。
+// 现改为：先定位「同志」，再向左逐字符收集姓名串（遇标点即止），
+// 并显式允许「姓名 + 括号补充 + 同志」与「姓名 + 单个中缀标点 + 同志」两种书写习惯。
+const RUN_CHAR=/[\u4e00-\u9fa5·、 \t\u3000A-Za-z]/;   // 不含换行，也不含逗号（逗号是分句符，见下方 guarded 延伸）
+const MID_PUNCT='，,、；;:：';
+// 单个姓名的合理长度上限（汉字数）。用于判断「逗号左侧那一段」是姓名还是普通分句，
+// 避免把「他强调了纪律」误判为姓名而过度脱敏。
+const MAX_NAME_LEN=4;
+
+function runHasNameChar(s){ return /[\u4e00-\u9fa5A-Za-z]/.test(s); }
+
+// 该片段是否「像一个完整姓名」：剥离泛称后为 2–4 个汉字且能定位到已知姓氏
+function looksLikeSingleName(s){
+  var pp=peelGenericSuffix(s);
+  var n=nameHanziLen(pp.cand);
+  return n>=2&&n<=MAX_NAME_LEN&&nameStartIndex(pp.cand)>=0;
+}
+
+// 向左收集姓名串起点：连续姓名串字符，并「整段跨过」括号补充，
+// 使「张三（预备党员）、李四（女）同志」中的两个姓名都在同一串内被处理。
+function scanRunStart(t,i,lo){
+  var k=i;
+  while(k>lo){
+    var ch=t.charAt(k-1);
+    if(BRACKET_PAIRS[ch]){
+      var j=t.lastIndexOf(BRACKET_PAIRS[ch],k-1);
+      if(j>=0&&k-j<=40){ k=j; continue; }
+      break;
+    }
+    if(RUN_CHAR.test(ch)){ k--; continue; }
+    break;
+  }
+  return k;
+}
+
+// 判定名字串末尾一段是否「像姓名」，用于被标点隔开的场景，
+// 避免把「他在报告中指出，同志们」误判成姓名而过度脱敏。
+function tailLooksLikeName(s){
+  var segs=s.split(RUN_DELIM_RE).filter(function(x){return x&&!isRunDelim(x);});
+  if(!segs.length) return false;
+  return looksLikeSingleName(segs[segs.length-1]);
+}
+
+// 返回 { start, repl }：把 [start, 同志) 区间替换为 repl（「同志」本身保持不变）
+function resolveRunBefore(t,p){
+  var i=p, tail;
+  var c=t.charAt(i-1);
+  if(BRACKET_PAIRS[c]){ var j=t.lastIndexOf(BRACKET_PAIRS[c],i-1);   // 括号补充（限长 40）
+    if(j>=0&&i-j<=40) i=j; }
+  while(i>0&&/[\s\u3000]/.test(t.charAt(i-1))) i--;
+  tail=t.slice(i,p);                                            // 姓名段之后的内容（空白/括号）原样保留
+  var lo=Math.max(0,i-400);
+  var k=scanRunStart(t,i,lo);                                   // 向左收集，遇标点即止
+  var run=t.slice(k,i);
+  if(!runHasNameChar(run)){
+    var cp=t.charAt(i-1);                                       // 「张三，同志」：被单个中缀标点隔开
+    if(cp&&MID_PUNCT.indexOf(cp)>=0){
+      var k2=scanRunStart(t,i-1,lo);
+      var run2=t.slice(k2,i-1);
+      if(runHasNameChar(run2)&&tailLooksLikeName(run2)){
+        return {start:k2, repl:maskNameRun(run2)+t.slice(i-1,p)};
+      }
+    }
+    return null;
+  }
+  // 逗号分句 vs 逗号分隔的名单：仅当逗号左侧那一段「本身就像一个姓名」时才继续向左延伸，
+  // 从而既覆盖「张三，李四，王五同志」，又不会把「他强调了纪律，张三同志」当成名单。
+  while(true){
+    var cp2=t.charAt(k-1);
+    if(k>lo&&cp2&&MID_PUNCT.indexOf(cp2)>=0){
+      var k3=scanRunStart(t,k-1,lo);
+      var prev=t.slice(k3,k-1);
+      if(runHasNameChar(prev)&&looksLikeSingleName(prev)){ k=k3; continue; }
+    }
+    break;
+  }
+  return {start:k, repl:maskNameRun(t.slice(k,i))+tail};
+}
+
+// 从右向左逐个处理「同志」：右侧已处理部分不受左侧替换影响，索引无需重算
+function maskByComradeAnchor(t){
+  var out=t, from=out.length;
+  while(true){
+    var p=out.lastIndexOf('同志',from);
+    if(p<0) break;
+    var r=resolveRunBefore(out,p);
+    if(r&&r.start<p) out=out.slice(0,r.start)+r.repl+out.slice(p);
+    from=p-1;
+  }
+  return out;
+}
 
 function desensitizeText(s){
   if(s===null||s===undefined) return s==null?'':s;
   if(typeof s!=='string') return s;
   var t=s;
   // ① 姓名 + 「同志」称谓（先处理姓名，避免被后续数字规则干扰）
-  t=t.replace(RE_NAME,function(m,p1){return maskNameRun(p1)+'同志';});
+  t=maskByComradeAnchor(t);
   // ② 身份证 18 位 → 前6 + ******** + 后4（须先于手机号，否则中间 11 位会被误判为手机号）
   t=t.replace(/(\d{6})\d{8}(\d{3}[\dXx])/g,'$1********$2');
   // ③ 手机号 11 位 → 前3 + **** + 后4
@@ -309,8 +408,8 @@ function desensitizeText(s){
   // ④ 邮箱 → 首字符 + ***@域名
   t=t.replace(/[\w.+-]+@([\w-]+\.[\w.-]+)/g,function(m,d){return m.charAt(0)+'***@'+d;});
   // ⑤ 合并相邻的脱敏片段，避免出现「该、该和该同志」这类残缺串（纯可读性，不涉新增泄露）
-  t=t.replace(/该(?:[、和与及]\s*该)+/g,'该');
-  t=t.replace(/该同志(?:[、和与及]\s*该同志)+/g,'该同志');
+  t=t.replace(/该(?:[、，,和与及]\s*该)+/g,'该');
+  t=t.replace(/该同志(?:[、，,和与及]\s*该同志)+/g,'该同志');
   return t;
 }
 

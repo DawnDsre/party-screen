@@ -37,8 +37,12 @@ a{color:var(--gold)}
 </style>
 </head>
 <body>
-<h1>党建电视大屏 · 后台管理</h1>
+<h1>党建电视大屏 · 后台管理 <span style="display:inline-block;font-size:13px;font-weight:400;letter-spacing:1px;background:#3fae6b;color:#fff;border-radius:20px;padding:2px 12px;vertical-align:middle">数据已脱敏</span></h1>
 <div class="sub">数据存放在你的 GitHub 仓库，发布后电视大屏自动拉取更新（无需服务器）</div>
+<div class="login-note" style="border-left-color:#3fae6b">
+  <b>脱敏说明：</b>发布时系统会自动对「会议内容 / 小结 / 标题 / 地点」执行文本脱敏（姓名→「该同志」、手机号/身份证/邮箱掩码），
+  并对党员名册进行聚合统计与职务泛化。<b>公开发布的数据不含任何真实姓名、手机号、身份证与邮箱。</b>
+</div>
 
 <!-- 登录：GitHub 令牌 -->
 <div class="card" id="loginCard">
@@ -210,6 +214,34 @@ function collect(){
   });
 }
 
+// ===== 文本脱敏（姓名 / 手机号 / 身份证 / 邮箱）=====
+// 说明：大屏展示数据 screen-data.json 面向公开仓库，任何自由文本字段都必须先过此函数，
+//       避免在会议内容/小结/标题/地点中泄露真实姓名、手机号、身份证号或邮箱。
+// 常见中文姓氏（用于精准锚定「姓氏 + 名 + 同志」结构，避免误伤「全体党员同志」等通用表述）
+const SURNAME_CHARS='李王张刘陈杨黄赵周吴徐孙马朱胡郭何高林罗郑梁谢宋唐许韩冯邓曹彭曾肖田董袁潘于蒋蔡余杜叶程苏魏吕丁任沈姚卢姜崔钟谭陆汪范金石廖贾夏韦付方白邹孟熊秦邱江尹薛闫段雷侯龙史陶黎贺顾毛郝龚邵万钱严覃武戴莫孔向汤';
+// 通用词黑名单：命中则不视为姓名（组织/支部/委员会/书记 等称谓不脱敏）
+const NAME_STOP_WORDS=['组织','支部','委员会','书记','党员','团员','全体','各位','广大','领导','干部','群众','人员','成员','大家'];
+// 姓名正则：姓氏锚定 + 1~3 个汉字 + 后接「同志」，如「张某同志」「王某同志」
+const RE_NAME=new RegExp('(['+SURNAME_CHARS+'][\\u4e00-\\u9fa5]{1,3})(?=同志)','g');
+
+function desensitizeText(s){
+  if(s===null||s===undefined) return s==null?'':s;
+  if(typeof s!=='string') return s;
+  let t=s;
+  // ① 姓名 + 「同志」称谓 → 该同志（先处理姓名，避免后续被数字类规则干扰）
+  t=t.replace(RE_NAME,function(seg){
+    if(NAME_STOP_WORDS.some(function(w){return seg.indexOf(w)>=0;})) return seg; // 通用词原样保留
+    return '该';
+  });
+  // ② 身份证 18 位 → 前6 + ******** + 后4（须先于手机号，否则中间 11 位会被误判为手机号）
+  t=t.replace(/(\d{6})\d{8}(\d{3}[\dXx])/g,'$1********$2');
+  // ③ 手机号 11 位 → 前3 + **** + 后4
+  t=t.replace(/(1[3-9]\d)\d{4}(\d{4})/g,'$1****$2');
+  // ④ 邮箱 → 首字符 + ***@域名
+  t=t.replace(/[\w.+-]+@([\w-]+\.[\w.-]+)/g,function(m,d){return m.charAt(0)+'***@'+d;});
+  return t;
+}
+
 // ===== 由 DATA 计算脱敏 screen-data.json =====
 function computeStats(members){
   const curYear=new Date().getFullYear();
@@ -231,7 +263,15 @@ function buildScreenData(){
   const stats=computeStats(members);
   const roster=members.map(m=>({gender:m.gender,education:m.education,status:m.status,position_level:(m.position&&m.position!=='党员')?'支委':'党员',department:m.department,honor:m.honor||''}));
   const meetings=(DATA.meetings||[]).slice().sort((a,b)=>{const fa=b.is_featured?1:0,fb=a.is_featured?1:0;if(fa!==fb)return fa-fb;return (b.mdate||'').localeCompare(a.mdate||'');})
-    .map(x=>({mtype:x.mtype,title:x.title,mdate:x.mdate,location:x.location,host:(x.host&&(x.host.includes('书记')||x.host.includes('委员')))?x.host:'负责人',attendees:x.attendees,content:x.content,summary:x.summary,is_featured:x.is_featured}));
+    .map(x=>({mtype:x.mtype,
+      title:desensitizeText(x.title),
+      mdate:x.mdate,
+      location:desensitizeText(x.location),
+      host:(x.host&&(x.host.includes('书记')||x.host.includes('委员')))?x.host:'负责人',
+      attendees:x.attendees,
+      content:desensitizeText(x.content),
+      summary:desensitizeText(x.summary),
+      is_featured:x.is_featured}));
   return {
     config:{branch_name:DATA.branch_config.branch_name,slogan:DATA.branch_config.slogan,intro:DATA.branch_config.intro||[]},
     stats, roster, meetings,

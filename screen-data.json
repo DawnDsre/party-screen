@@ -34,7 +34,7 @@
   "meetings": [
     { "mtype": "支部委员会", "title": "第二季度支部委员会", "mdate": "2026-08-22", "location": "党员活动室", "host": "负责人", "attendees": 5, "content": "研究部署党纪学习教育工作安排，审议支部半年工作总结。", "summary": "形成季度工作计划1份", "is_featured": 1 },
     { "mtype": "党课", "title": "党纪学习教育专题党课", "mdate": "2026-08-15", "location": "大会议室", "host": "负责人", "attendees": 12, "content": "围绕《中国共产党纪律处分条例》开展专题辅导，强化党员纪律意识。", "summary": "党员撰写心得体会12篇", "is_featured": 1 },
-    { "mtype": "支部党员大会", "title": "预备党员转正大会", "mdate": "2026-08-08", "location": "党员活动室", "host": "负责人", "attendees": 12, "content": "讨论并通过刘洋同志预备党员转正事宜。", "summary": "刘洋同志按期转正", "is_featured": 0 },
+    { "mtype": "支部党员大会", "title": "预备党员转正大会", "mdate": "2026-08-08", "location": "党员活动室", "host": "负责人", "attendees": 12, "content": "讨论并通过该同志预备党员转正事宜。", "summary": "该同志按期转正", "is_featured": 0 },
     { "mtype": "党小组会", "title": "研发党小组学习会", "mdate": "2026-08-01", "location": "研发部办公室", "host": "负责人", "attendees": 4, "content": "学习习近平总书记关于科技创新的重要论述，交流学习体会。", "summary": "小组学习记录1份", "is_featured": 0 },
     { "mtype": "支部委员会", "title": "第一季度支部委员会", "mdate": "2026-07-15", "location": "党员活动室", "host": "负责人", "attendees": 5, "content": "研究年度党建工作计划与主题党日安排。", "summary": "制定年度计划", "is_featured": 0 }
   ],

@@ -246,9 +246,12 @@ function looksLikeOrgName(body){
 }
 // 姓名区切分符：连接词 / 顿号逗号 / 省略号 / 各类括号组。
 // 切分后「切分符本身原样保留」，因此「张三（预备党员）、李四」可还原为「该（预备党员）、该」。
-const RUN_DELIM_RE=/([、，,和与及]|…+|（[^）]{0,40}）|\([^)]{0,40}\)|【[^】]{0,40}】|《[^》]{0,40}》|「[^」]{0,40}」|『[^』]{0,40}』)/;
+// 省略号写法覆盖：…（U+2026）/ ⋯（U+22EF）单字符即成省略号；
+// ASCII 点与中文句号需连续 ≥2 个才算（单个「.」「。」是正常断句，误判会吞掉上一句）。
+const ELLIPSIS_RE=/[…⋯]+|\.{2,}|。{2,}/;
+const RUN_DELIM_RE=/([、，,和与及]|[…⋯]+|\.{2,}|。{2,}|（[^）]{0,40}）|\([^)]{0,40}\)|【[^】]{0,40}】|《[^》]{0,40}》|「[^」]{0,40}」|『[^』]{0,40}』)/;
 function isRunDelim(t){
-  return /^[、，,和与及]$/.test(t)||/^…+$/.test(t)||/^（[^）]*）$/.test(t)||/^\([^)]*\)$/.test(t)||/^【[^】]*】$/.test(t)||/^《[^》]*》$/.test(t)||/^「[^」]*」$/.test(t)||/^『[^』]*』$/.test(t);
+  return /^[、，,和与及]$/.test(t)||/^[…⋯]+$/.test(t)||/^\.{2,}$/.test(t)||/^。{2,}$/.test(t)||/^（[^）]*）$/.test(t)||/^\([^)]*\)$/.test(t)||/^【[^】]*】$/.test(t)||/^《[^》]*》$/.test(t)||/^「[^」]*」$/.test(t)||/^『[^』]*』$/.test(t);
 }
 // 各类括号的「右 → 左」配对表，用于向左扫描时整段跨过括号补充（如「张三（预备党员）」）
 const BRACKET_PAIRS={'）':'（',')':'(','】':'【','》':'《','」':'「','』':'『'};
@@ -387,6 +390,21 @@ function readTokenLeft(t,pos,lo){
   return k;
 }
 
+// 向左消费连续省略号类字符，返回该「省略号串」的最左下标；非省略号形态返回 -1。
+// 与 ELLIPSIS_RE 阈值保持一致：…/⋯ 单字符即成省略号，ASCII 点与中文句号需连续 ≥2 个。
+function ellipsisRunStart(t,q,lo){
+  var p=q,uni=0,dots=0;
+  while(p>lo){
+    var c=t.charAt(p-1);
+    if(c==='…'||c==='⋯'){ uni++; p--; continue; }
+    if(c==='.'||c==='。'){ dots++; p--; continue; }
+    break;
+  }
+  if(p===q) return -1;
+  if(!uni&&dots<2) return -1;                                  // 单个「.」/「。」不算省略号
+  return p;
+}
+
 // 名单向左扩展：以当前姓名段为尾，向左跨越「、，,」「各类括号组」「省略号」；
 // 其中「、，,」分隔符只有在左侧片段「像姓名」时才跨越，确保
 //   「张三、李四、…（23 人）…许二三」整串脱敏，而「研发部、财务部、张三」仅脱敏张三。
@@ -402,14 +420,16 @@ function extendListLeft(t,k,lo){
       if(j>=0&&e-j<=40){ start=j; continue; }
       break;
     }
-    if(ch==='…'){                                                // 省略号：可连续，且可夹杂括号补充/空白
-      var q=e;
+    var es=ellipsisRunStart(t,e,lo);
+    if(es>=0){                                                   // 省略号（…/⋯/.../。。。）：可连续，且可夹杂括号补充/空白
+      var q=es;
       while(q>lo){                                               // 连续消费「省略号 / 空白 / 括号组」噪声分隔符
         var c2=t.charAt(q-1);
-        if(c2==='…'){ while(q>lo&&t.charAt(q-1)==='…') q--; continue; }
         if(/[\s\u3000]/.test(c2)){ q--; continue; }
         if(BRACKET_PAIRS[c2]){ var j2=t.lastIndexOf(BRACKET_PAIRS[c2],q-1);
           if(j2>=0&&q-j2<=40){ q=j2; continue; } }
+        var es2=ellipsisRunStart(t,q,lo);
+        if(es2>=0){ q=es2; continue; }
         break;
       }
       var tk=readTokenLeft(t,q,lo);

@@ -26,12 +26,28 @@ jobs:
         run: |
           test -f screen-data.json && echo "screen-data.json 存在" || (echo "缺少 screen-data.json" && exit 1)
           node -e "JSON.parse(require('fs').readFileSync('screen-data.json','utf8')); console.log('JSON 校验通过')"
+      # 发布面收敛：仅把大屏运行真正需要的 3 个文件复制到白名单目录 _site，
+      # 绝不发布 data/（源数据表）、README、改造说明、脚本、.github 等。
+      - name: Build publish whitelist (_site)
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf _site
+          mkdir -p _site
+          for f in index.html screen-data.json admin.html; do
+            if [ ! -f "$f" ]; then
+              echo "缺少发布白名单文件: $f" >&2
+              exit 1
+            fi
+          done
+          cp -f index.html screen-data.json admin.html _site/
+          echo "已发布文件:" && ls -la _site
       - name: Setup Pages
         uses: actions/configure-pages@v5
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: .
+          path: _site
   deploy:
     needs: build
     runs-on: ubuntu-latest

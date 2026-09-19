@@ -180,7 +180,7 @@ function renderMembers(){
     div.innerHTML=`<b>党员 #${mi+1}</b>
       <div class="row"><div><label>性别</label><select data-p="${mi}" data-k="gender"><option ${m.gender==='男'?'selected':''}>男</option><option ${m.gender==='女'?'selected':''}>女</option></select></div>
       <div><label>学历</label><input data-p="${mi}" data-k="education" value="${m.education||''}"></div>
-      <div><label>出生年份</label><input data-p="${mi}" data-k="birth_year" value="${m.birth_year||''}"></div>
+      <div><label>年龄段</label><select data-p="${mi}" data-k="age_group">${AGE_GROUPS.map(g=>`<option ${ageGroupOf(m)===g?'selected':''}>${g}</option>`).join('')}</select></div>
       <div><label>身份</label><select data-p="${mi}" data-k="status"><option ${m.status==='正式党员'?'selected':''}>正式党员</option><option ${m.status==='预备党员'?'selected':''}>预备党员</option></select></div>
       <div><label>党内职务</label><input data-p="${mi}" data-k="position" value="${m.position||''}"></div>
       <div><label>部门</label><input data-p="${mi}" data-k="department" value="${m.department||''}"></div>
@@ -190,7 +190,7 @@ function renderMembers(){
   });
 }
 function delMember(mi){ DATA.members.splice(mi,1); renderMembers(); }
-function addMember(){ DATA.members.push({gender:'男',education:'本科',birth_year:1990,status:'正式党员',position:'党员',department:'',honor:''}); renderMembers(); }
+function addMember(){ DATA.members.push({gender:'男',education:'本科',age_group:'31-40',status:'正式党员',position:'党员',department:'',honor:''}); renderMembers(); }
 
 // ===== 收集表单 -> DATA =====
 function collect(){
@@ -215,31 +215,118 @@ function collect(){
 }
 
 // ===== 文本脱敏（姓名 / 手机号 / 身份证 / 邮箱）=====
-// 说明：大屏展示数据 screen-data.json 面向公开仓库，任何自由文本字段都必须先过此函数，
-//       避免在会议内容/小结/标题/地点中泄露真实姓名、手机号、身份证号或邮箱。
-// 常见中文姓氏（用于精准锚定「姓氏 + 名 + 同志」结构，避免误伤「全体党员同志」等通用表述）
-const SURNAME_CHARS='李王张刘陈杨黄赵周吴徐孙马朱胡郭何高林罗郑梁谢宋唐许韩冯邓曹彭曾肖田董袁潘于蒋蔡余杜叶程苏魏吕丁任沈姚卢姜崔钟谭陆汪范金石廖贾夏韦付方白邹孟熊秦邱江尹薛闫段雷侯龙史陶黎贺顾毛郝龚邵万钱严覃武戴莫孔向汤';
-// 通用词黑名单：命中则不视为姓名（组织/支部/委员会/书记 等称谓不脱敏）
-const NAME_STOP_WORDS=['组织','支部','委员会','书记','党员','团员','全体','各位','广大','领导','干部','群众','人员','成员','大家'];
-// 姓名正则：姓氏锚定 + 1~3 个汉字 + 后接「同志」，如「张某同志」「王某同志」
-const RE_NAME=new RegExp('(['+SURNAME_CHARS+'][\\u4e00-\\u9fa5]{1,3})(?=同志)','g');
+// 说明：screen-data.json 面向公开仓库，会议标题/地点/内容/小结等自由文本字段都必须先过此函数。
+// 策略（反向锚定）：以「同志」为锚点向左回溯姓名串，覆盖复姓（欧阳/司马/长孙/诸葛…）、
+//   少数民族姓名（含「·」）、多姓名连写（、和与及）与「姓名+职务」；通用集体/职务称谓原样保留，
+//   杜绝「司该同志」「长该同志」式残留，且对已脱敏文本幂等。
+// 常见单字姓氏（百家姓前 100 + 常见补充姓氏）
+const SINGLE_SURNAMES='李王张刘陈杨黄赵周吴徐孙马朱胡郭何高林罗郑梁谢宋唐许韩冯邓曹彭曾肖田董袁潘于蒋蔡余杜叶程苏魏吕丁任沈姚卢姜崔钟谭陆汪范金石廖贾夏韦付方白邹孟熊秦邱江尹薛闫段雷侯龙史陶黎贺顾毛郝龚邵万钱严覃武戴莫孔向汤焦冼危佟'+'华岳詹阮涂齐祁庄舒项祝梅盛欧隋尚骆边温宁柯康凌柳鲁苗倪聂牛农庞裴蒲浦乔裘曲屈全冉饶荣容桑邵申施帅司宿索滕童屠危卫翁伍席辛邢颜晏燕易殷应雍尤游俞虞禹喻元云章甄支诸卓宗祖左';
+// 常见复姓（用于识别 2 字姓氏起点）
+const COMPOUND_SURNAMES=['欧阳','司马','上官','诸葛','长孙','慕容','皇甫','令狐','尉迟','夏侯','宇文','端木','独孤','南宫','西门','东门','呼延','公孙','仲孙','钟离','太史','申屠','司徒','司空','东方','赫连','澹台','公冶','濮阳','淳于','单于','乐正','轩辕','闾丘','公良','段干','百里','东郭','第五','万俟','拓跋','完颜','鲜于','司寇','子车','颛孙','巫马','公西','漆雕','壤驷','夹谷','宰父','谷梁','羊舌','微生','梁丘','左丘','南荣'];
+// 集体/泛称（不视为姓名）
+const ORG_GENERIC=['委员会','组织','支部','党员','团员','全体','各位','广大','领导','干部','群众','人员','成员','大家','老党员','新党员'];
+// 个人职务/头衔（姓名后可保留，如「院士」「书记」）
+const TITLE_WORDS=['院士','教授','博士','硕士','主任','主席','部长','局长','处长','科长','队长','经理','工程师','顾问','老师','专员','秘书','助理','总监','巡视员','调研员','委员','书记','组长','班长','同志'];
+const GENERIC_ALL=ORG_GENERIC.concat(TITLE_WORDS).sort(function(a,b){return b.length-a.length;});
+const NAME_CONNECTOR_RE=/([、和与及])/;
+const NAME_HANZI=/[\u4e00-\u9fa5]/;
+
+function nameHanziLen(s){var n=0;for(var i=0;i<s.length;i++){if(NAME_HANZI.test(s[i]))n++;}return n;}
+function surnameAt(s,i){
+  if(i<0||i>=s.length) return 0;
+  var two=s.substr(i,2);
+  if(two.length===2&&COMPOUND_SURNAMES.indexOf(two)>=0) return 2;
+  if(SINGLE_SURNAMES.indexOf(s[i])>=0) return 1;
+  return 0;
+}
+// 从右向左剥离通用/职务称谓，返回 { cand: 姓名候选, suffix: 被剥离的泛称 }
+function peelGenericSuffix(part){
+  var cut=part.length, matched=true;
+  while(matched){
+    matched=false;
+    for(var i=0;i<GENERIC_ALL.length;i++){
+      var g=GENERIC_ALL[i];
+      if(g.length<=cut&&part.slice(cut-g.length,cut)===g){ cut-=g.length; matched=true; break; }
+    }
+  }
+  return { cand:part.slice(0,cut), suffix:part.slice(cut) };
+}
+// 判定姓名在串中的起始位置：姓名紧邻「同志」左侧，长度为 2–4 字，
+// 取「最长且首字为已知姓氏」的后缀作为姓名候选；无有效候选返回 -1（整体脱敏）。
+// 之所以「最长优先」：华罗庚（华+罗庚）若按下限取 2 字会误判成「罗庚」，
+// 把真正的姓氏「华」当语境留在明文里。
+function nameStartIndex(body){
+  var n=body.length;
+  for(var L=Math.min(4,n);L>=2;L--){
+    var cand=body.slice(n-L);
+    if(!NAME_HANZI.test(cand.charAt(0))) continue;   // 候选首字符必须是汉字
+    if(surnameAt(cand,0)>0) return n-L;
+  }
+  return -1;
+}
+function maskNamePart(part){
+  if(!part) return part;
+  if(part.indexOf('该')>=0) return part;                         // 幂等：已脱敏片段不再处理
+  var p=peelGenericSuffix(part);
+  if(p.cand==='') return part;                                   // 整段均为泛称 → 保留
+  if(p.suffix!==''&&nameHanziLen(p.cand)<=1){                    // 「单字+泛称」：职务→脱敏；集体/介词→保留
+    return TITLE_WORDS.some(function(t){return p.suffix.indexOf(t)===0;})?('该'+p.suffix):part;
+  }
+  var body=p.cand;
+  if(body.indexOf('·')>=0) return '该'+p.suffix;                  // 少数民族姓名
+  var i=nameStartIndex(body);
+  if(i<=0) return '该'+p.suffix;                                 // 姓名即整段 / 无法定位 → 候选整体脱敏
+  var ctx=body.slice(0,i);
+  // 姓名左侧只剩 1 个汉字时，它更可能是姓名首字而非语境词（如「华罗庚」的「华」），一并脱敏
+  if(nameHanziLen(ctx)<=1) return '该'+p.suffix;
+  return ctx+'该'+p.suffix;                                      // 2 字以上语境（会议由/支部书记/研发部）保留
+}
+function maskNameRun(run){
+  var m=run.match(/^(\s*)([\s\S]*?)(\s*)$/); if(!m) return run;
+  var lead=m[1], body=m[2], trail=m[3];
+  if(!body) return run;
+  var out=body.split(NAME_CONNECTOR_RE).map(function(t){
+    if(t==='') return '';
+    if(t.length===1&&NAME_CONNECTOR_RE.test(t)) return t;        // 连接词原样保留
+    return maskNamePart(t);
+  }).join('');
+  return lead+out+trail;
+}
+// 姓名锚定正则：捕获紧邻「同志」的汉字/顿号/·/空白串，并连同「同志」一起消费，
+// 内部 (?!同志) 防止跨越中间的「同志」。
+const RE_NAME=/([\u4e00-\u9fa5·](?:(?!同志)[\u4e00-\u9fa5、·\s]){0,39})同志/g;
 
 function desensitizeText(s){
   if(s===null||s===undefined) return s==null?'':s;
   if(typeof s!=='string') return s;
-  let t=s;
-  // ① 姓名 + 「同志」称谓 → 该同志（先处理姓名，避免后续被数字类规则干扰）
-  t=t.replace(RE_NAME,function(seg){
-    if(NAME_STOP_WORDS.some(function(w){return seg.indexOf(w)>=0;})) return seg; // 通用词原样保留
-    return '该';
-  });
+  var t=s;
+  // ① 姓名 + 「同志」称谓（先处理姓名，避免被后续数字规则干扰）
+  t=t.replace(RE_NAME,function(m,p1){return maskNameRun(p1)+'同志';});
   // ② 身份证 18 位 → 前6 + ******** + 后4（须先于手机号，否则中间 11 位会被误判为手机号）
   t=t.replace(/(\d{6})\d{8}(\d{3}[\dXx])/g,'$1********$2');
   // ③ 手机号 11 位 → 前3 + **** + 后4
   t=t.replace(/(1[3-9]\d)\d{4}(\d{4})/g,'$1****$2');
   // ④ 邮箱 → 首字符 + ***@域名
   t=t.replace(/[\w.+-]+@([\w-]+\.[\w.-]+)/g,function(m,d){return m.charAt(0)+'***@'+d;});
+  // ⑤ 合并相邻的脱敏片段，避免出现「该、该和该同志」这类残缺串（纯可读性，不涉新增泄露）
+  t=t.replace(/该(?:[、和与及]\s*该)+/g,'该');
+  t=t.replace(/该同志(?:[、和与及]\s*该同志)+/g,'该同志');
   return t;
+}
+
+// ===== 年龄段与主持人角色（脱敏：准标识符处理）=====
+// 年龄段（5 档）：公开数据只保留年龄段，不再保留精确出生年份（避免准标识符再识别）
+const AGE_GROUPS=['≤30','31-40','41-50','51-60','>60'];
+// 主持人角色白名单：仅这些「精确角色」原样保留，其余（含姓名+职务）一律泛化为「负责人」
+const HOST_ROLE_WHITELIST=['党支部书记','党支部副书记','书记','副书记','组织委员','宣传委员','纪检委员','委员','党小组长','支部委员'];
+// 由「年龄段(优先)」或「出生年份(兼容旧数据)」推导年龄段
+function ageGroupOf(m,curYear){
+  curYear=curYear||new Date().getFullYear();
+  if(m&&m.age_group&&AGE_GROUPS.indexOf(m.age_group)>=0) return m.age_group;
+  const by=m&&m.birth_year;
+  if(by){ const a=curYear-(+by);
+    if(a<=30) return '≤30'; if(a<=40) return '31-40'; if(a<=50) return '41-50'; if(a<=60) return '51-60'; return '>60'; }
+  return '31-40'; // 缺省（与旧逻辑 curYear-35 一致）
 }
 
 // ===== 由 DATA 计算脱敏 screen-data.json =====
@@ -251,8 +338,8 @@ function computeStats(members){
   for(const m of members){
     const g=m.gender||'未知'; gender[g]=(gender[g]||0)+1;
     if(m.education in education) education[m.education]++;
-    const by=m.birth_year||(curYear-35), a=curYear-by;
-    if(a<=30)age['≤30']++; else if(a<=40)age['31-40']++; else if(a<=50)age['41-50']++; else if(a<=60)age['51-60']++; else age['>60']++;
+    const grp=ageGroupOf(m,curYear);                       // 直接按年龄段计数（不再用当前年份减出生年）
+    if(grp in age) age[grp]++;
     const st=m.status||'正式党员'; status[st]=(status[st]||0)+1;
     if(st==='正式党员')formal++; else if(st==='预备党员')probation++;
   }
@@ -267,7 +354,7 @@ function buildScreenData(){
       title:desensitizeText(x.title),
       mdate:x.mdate,
       location:desensitizeText(x.location),
-      host:(x.host&&(x.host.includes('书记')||x.host.includes('委员')))?x.host:'负责人',
+      host:HOST_ROLE_WHITELIST.indexOf((x.host||'').trim())>=0?(x.host||'').trim():'负责人',
       attendees:x.attendees,
       content:desensitizeText(x.content),
       summary:desensitizeText(x.summary),
@@ -302,7 +389,7 @@ async function connect(){
     setStatus('status','连接成功，已加载现有数据。','ok');
   }catch(e){ setStatus('status','连接失败：'+e.message,'err'); }
 }
-function jsonFromScreen(sd){ return {branch_config:sd.config||{branch_name:'',slogan:'',intro:[]},members:(sd.roster||[]).map(r=>({gender:r.gender,education:r.education,status:r.status,position:r.position_level==='支委'?'党支部委员':'党员',department:r.department,honor:r.honor})),meetings:sd.meetings||[]}; }
+function jsonFromScreen(sd){ return {branch_config:sd.config||{branch_name:'',slogan:'',intro:[]},members:(sd.roster||[]).map(r=>({gender:r.gender,education:r.education,age_group:r.age_group||'31-40',status:r.status,position:r.position_level==='支委'?'党支部委员':'党员',department:r.department,honor:r.honor})),meetings:sd.meetings||[]}; }
 
 // ===== 发布 =====
 async function publish(){

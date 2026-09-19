@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>党建电视大屏 · 网页版（离线可开）</title>
+<title>党建电视大屏 · 数据已脱敏（GitHub Pages 固定域名）</title>
 <style>
 :root{
   --red-deep:#5e0b0b;--red:#8c1418;--red-bright:#c8161d;
@@ -144,10 +144,12 @@ html,body{height:100%;font-family:"Microsoft YaHei","PingFang SC","Hiragino Sans
     <div id="scaler"></div>
   </div>
 </div>
-<div class="warn">网页示例版 · 内嵌示例数据（非真实信息）</div>
+<div class="warn">数据来自 GitHub Pages 固定域名 · 已脱敏 · 每 30 秒自动更新</div>
 <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
 <script>
-// ===== 数据来自仓库内的 screen-data.json（后台「保存并发布」后自动更新，大屏每 30 秒轮询） =====
+// ===== 数据来自 GitHub Pages 固定域名（相对路径，部署到任意域名下自动生效）；大屏每 30 秒轮询 =====
+// 数据源可用 URL 查询参数覆盖，便于验证或切换：index.html?src=./screen-data.json
+const DATA_URL = new URLSearchParams(location.search).get('src') || './screen-data.json';
 let CONFIG={branch_name:"中共云南中宣液态金属科技有限公司支部委员会",slogan:"不忘初心 牢记使命",
   intro:[{step:"一",title:"一抓",subtitle:"抓规范夯基础",items:["阵地建设规范化","支部设置标准化","组织管理精细化","工作制度体系化","活动开展常态化"]},
     {step:"二",title:"二创",subtitle:"勇创新争一流",items:["创一流党支部","创一流人才队伍"]},
@@ -155,9 +157,16 @@ let CONFIG={branch_name:"中共云南中宣液态金属科技有限公司支部�
 let STATS={total:12,formal:11,probation:1,gender:{男:7,女:5},education:{"高中及以下":1,"大专":2,"本科":6,"硕士研究生":2,"博士研究生":1},age:{"≤30":2,"31-40":6,"41-50":4,"51-60":0,">60":0},status:{"正式党员":11,"预备党员":1}};
 let ROSTER=[];
 let MEETINGS=[];
+let UPDATED_AT='';   // 最近一次成功拉取数据的更新时间（翻页重建 DOM 后仍可展示）
 function applyData(d){ if(!d)return; CONFIG=d.config||CONFIG; STATS=d.stats||STATS; ROSTER=d.roster||[]; MEETINGS=d.meetings||[];
-  const u=document.getElementById('updatedAt'); if(u)u.textContent='最后更新：'+(d.updated_at||'—'); }
-async function loadData(){ try{ const r=await fetch('./screen-data.json',{cache:'no-store'}); if(r.ok){ applyData(await r.json()); renderHome(); } }catch(e){ console.warn('拉取 screen-data.json 失败',e); } }
+  UPDATED_AT=('updated_at' in d)&&d.updated_at?d.updated_at:'—'; }
+async function loadData(){
+  try{
+    const r=await fetch(DATA_URL,{cache:'no-store'});
+    if(r.ok){ applyData(await r.json()); renderHome(); }
+    else { console.warn('拉取数据失败，保留上一次数据：'+DATA_URL+'（HTTP '+r.status+'）'); }
+  }catch(e){ console.warn('拉取数据失败，保留上一次数据：'+DATA_URL,e); }
+}
 
 const C={red:"#c8161d",gold:"#e9c885",goldSoft:"#f2dcab",ink:"#f5ead6",line:"rgba(233,200,133,.3)"};
 const axis={color:C.goldSoft,fontSize:14};
@@ -233,7 +242,7 @@ function renderHome(){
         <div class="panel"><div class="panel-title"><span>支部党员名册</span></div><div class="member-table" id="tb"></div></div>
       </section>
     </main>
-    <footer class="screen-footer"><span>数据来源：支部后台管理系统　<span id="updatedAt"></span></span><span class="foot-brand">云南中宣液态金属科技党支部 创作发布</span></footer>
+    <footer class="screen-footer"><span>数据来源：<span id="dataSrc">${DATA_URL}</span>　<span id="updatedAt">最后更新：${UPDATED_AT||'—'}</span></span><span class="foot-brand">数据已脱敏 · 云南中宣液态金属科技党支部 创作发布</span></footer>
   </div>`;
     document.getElementById("ml").innerHTML=MEETINGS.map(m=>`<li><div class="mt-head"><span class="mt-type">${m.mtype}</span><span class="mt-title">${m.title}</span></div>
     <div class="mt-meta">${m.mdate} · ${m.location} · 主持：${m.host} · 参会 ${m.attendees} 人</div>${m.summary?`<div class="mt-summary">${m.summary}</div>`:""}</li>`).join("");
@@ -271,7 +280,7 @@ function renderCatalog(cat){
         <button class="back-home" id="bh">↩ 返回大屏主页</button></div></section>
       <section class="col col-center" style="grid-column:2 / 4"><div class="panel" style="flex:1"><div class="panel-title"><span id="ct"></span></div><div class="cat-content" id="cc"></div></div></section>
     </main>
-    <footer class="screen-footer"><span>数据来源：支部后台管理系统（联网实时同步）</span><span class="foot-brand">云南中宣液态金属科技党支部 创作发布</span></footer>
+    <footer class="screen-footer"><span>数据来源：<span id="dataSrc">${DATA_URL}</span>　<span id="updatedAt">最后更新：${UPDATED_AT||'—'}</span></span><span class="foot-brand">数据已脱敏 · 云南中宣液态金属科技党支部 创作发布</span></footer>
   </div>`;
   const titles={overview:"支部概况",members:"党员名册",meetings:"三会一课",analysis:"数据分析",honor:"荣誉展播"};
   document.getElementById("ct").textContent=titles[cat]||"详情";
@@ -314,8 +323,9 @@ document.getElementById("bHome").onclick=showHome;
 document.getElementById("bCatalog").onclick=showCatalog;
 document.getElementById("bHide").onclick=()=>{document.getElementById("bar").style.display="none";document.getElementById("stage").style.top="0";};
 document.getElementById("bFull").onclick=()=>document.documentElement.requestFullscreen();
-loadData();
-setInterval(loadData, 30000);
+renderHome();                            // 首屏先用内置示例数据渲染，避免首次拉取失败时白屏
+loadData();                              // 立即拉取固定域名数据
+setInterval(loadData, 30000);            // 每 30 秒自动刷新（拉取失败保留上一次数据）
 </script>
 </body>
 </html>

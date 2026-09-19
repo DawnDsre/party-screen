@@ -228,9 +228,22 @@ const ORG_GENERIC=['委员会','组织','支部','党员','团员','全体','各
 // 个人职务/头衔（姓名后可保留，如「院士」「书记」）
 const TITLE_WORDS=['院士','教授','博士','硕士','主任','主席','部长','局长','处长','科长','队长','经理','工程师','顾问','老师','专员','秘书','助理','总监','巡视员','调研员','委员','书记','组长','班长','同志'];
 const GENERIC_ALL=ORG_GENERIC.concat(TITLE_WORDS).sort(function(a,b){return b.length-a.length;});
-// 机构/部门词尾缀：以这些字收尾且定位不到姓氏的片段，判定为组织名而非姓名，原名保留。
-// 避免「研发部、财务部、张三同志」这类「部门 + 姓名」的名单把部门一并脱敏成「该」。
-const ORG_TAIL=['部','科','室','组','中心','公司','集团','厂','处','局','院','所','委','会','班','系','队','站','办','事业部','党总支','党委','车间','分公司'];
+// 机构/部门词尾缀：用于把「研发部、财务部、张三同志」里的部门名与姓名区分开。
+const ORG_TAIL=['部','科','室','组','中心','公司','集团','厂','处','局','院','所','委','会','班','系','队','站','办','事业部','党总支','党委','车间','分公司','工会','团委','纪委','总支','党组','妇联'];
+// 判定是否为组织/部门名（以机构尾缀收尾）。
+// 单字尾缀（部/所/会/委…）要求整段 ≥3 个汉字：否则「苟部」「佘所」这类
+// 「表外姓氏 + 机构尾缀字」的两字人名会被误判成组织名而放行。
+// 多字尾缀（中心/公司/集团/事业部/党总支…）足够特异，不受长度限制。
+function looksLikeOrgName(body){
+  var hl=nameHanziLen(body);
+  for(var i=0;i<ORG_TAIL.length;i++){
+    var w=ORG_TAIL[i];
+    if(body.slice(-w.length)!==w) continue;
+    if(w.length>=2) return true;
+    if(hl>=3) return true;
+  }
+  return false;
+}
 // 姓名区切分符：连接词 / 顿号逗号 / 省略号 / 各类括号组。
 // 切分后「切分符本身原样保留」，因此「张三（预备党员）、李四」可还原为「该（预备党员）、该」。
 const RUN_DELIM_RE=/([、，,和与及]|…+|（[^）]{0,40}）|\([^)]{0,40}\)|【[^】]{0,40}】|《[^》]{0,40}》|「[^」]{0,40}」|『[^』]{0,40}』)/;
@@ -285,8 +298,8 @@ function maskNamePart(part){
   var body=p.cand;
   if(body.indexOf('·')>=0) return '该'+p.suffix;                  // 少数民族姓名
   var i=nameStartIndex(body);
-  // 定位不到姓氏、且以机构尾缀收尾（研发部/财务部/技术中心）→ 判定为组织名，原名保留
-  if(i<0&&ORG_TAIL.some(function(w){return body.slice(-w.length)===w;})) return part;
+  // 定位不到姓氏、且形如机构/部门名（研发部/财务部/技术中心）→ 判定为组织名，原名保留
+  if(i<0&&looksLikeOrgName(body)) return part;
   if(i<=0) return '该'+p.suffix;                                 // 姓名即整段 / 无法定位 → 候选整体脱敏
   var ctx=body.slice(0,i);
   // 姓名左侧只剩 1 个汉字时，它更可能是姓名首字而非语境词（如「华罗庚」的「华」），一并脱敏
@@ -389,19 +402,20 @@ function extendListLeft(t,k,lo){
       if(j>=0&&e-j<=40){ start=j; continue; }
       break;
     }
-    if(ch==='…'){                                                // 省略号：左侧确为姓名才跨越
-      var q=e; while(q>lo&&t.charAt(q-1)==='…') q--;
-      var q2=q;                                                  // 省略号左侧可能还跟着括号补充
-      while(q2>lo){
-        var c2=t.charAt(q2-1);
-        if(/[\s\u3000]/.test(c2)){ q2--; continue; }
-        if(BRACKET_PAIRS[c2]){ var j2=t.lastIndexOf(BRACKET_PAIRS[c2],q2-1);
-          if(j2>=0&&q2-j2<=40){ q2=j2; continue; } }
+    if(ch==='…'){                                                // 省略号：可连续，且可夹杂括号补充/空白
+      var q=e;
+      while(q>lo){                                               // 连续消费「省略号 / 空白 / 括号组」噪声分隔符
+        var c2=t.charAt(q-1);
+        if(c2==='…'){ while(q>lo&&t.charAt(q-1)==='…') q--; continue; }
+        if(/[\s\u3000]/.test(c2)){ q--; continue; }
+        if(BRACKET_PAIRS[c2]){ var j2=t.lastIndexOf(BRACKET_PAIRS[c2],q-1);
+          if(j2>=0&&q-j2<=40){ q=j2; continue; } }
         break;
       }
-      var tk=readTokenLeft(t,q2,lo);
-      if(tk<q2&&looksLikeNameSegment(t.slice(tk,q2))){ start=tk; continue; }
-      break;   // 左侧非姓名 → 不消费省略号，避免产生悬空的「……该」
+      var tk=readTokenLeft(t,q,lo);
+      if(tk<q&&looksLikeNameSegment(t.slice(tk,q))){ start=tk; continue; }   // 噪声左侧是姓名 → 一并脱敏
+      if(q>lo&&'、，,'.indexOf(t.charAt(q-1))>=0){ start=q; continue; }      // 噪声左侧是列表分隔符 → 交外层跨越
+      break;   // 否则不消费省略号，避免产生悬空的「……该」
     }
     if('、，,'.indexOf(ch)>=0){                                   // 列表分隔符：左侧须像姓名才跨越
       var s1=readTokenLeft(t,e-1,lo);
